@@ -4,6 +4,21 @@ from typing import Any
 from . import repo, state_machine, hero_registry, nickname as nickname_mod, affinity as affinity_mod
 from .llm.client import complete_json
 
+# 5행 상성 사이클: 금 → 바람 → 흙 → 물 → 불 → 금 (각 원소가 다음을 억제)
+CYCLE_NEXT = {"금": "바람", "바람": "흙", "흙": "물", "물": "불", "불": "금"}
+
+
+def attribute_bonus(weapon_attr: str | None, demon_attr: str | None) -> float:
+    """무기가 적 속성을 억제하면 1.3, 역이면 0.7, 그 외 1.0."""
+    if not weapon_attr or not demon_attr:
+        return 1.0
+    if CYCLE_NEXT.get(weapon_attr) == demon_attr:
+        return 1.3
+    if CYCLE_NEXT.get(demon_attr) == weapon_attr:
+        return 0.7
+    return 1.0
+
+
 DEMONS: list[dict[str, Any]] = [
     # Tier 1 — 잡몹 (난이도 1–15)
     {"type": "고블린",         "attribute": "흙",   "difficulty": (1, 12)},
