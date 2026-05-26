@@ -33,6 +33,25 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     # 매도: 플레이어 제시가는 용사 보유 금화 이하로만 (용사가 못 살 가격은 비현실).
     safe_price = min(max(1, int(price_offered)), max(1, hero_gold))
 
+    # Plan 3: 호감도 ≤ -50 → 즉시 거부 (협상 진입 자체 거부)
+    from . import affinity as affinity_mod
+    affinity = int(hero.get("affinity", 0))
+    max_pct = affinity_mod.allowed_max_pct(affinity)
+    if max_pct == affinity_mod.REJECT_SENTINEL:
+        player_now = repo.load_player()
+        repo.insert_day_event(
+            day=player_now["current_day"], phase=player_now["current_phase"],
+            kind="reject", payload={"by": "hero_blacklist", "hero_id": hero_id, "rep_delta": 0},
+        )
+        repo.update_player(current_phase=state_machine.next_phase(player_now["current_phase"]))
+        return {
+            "negotiation_id": -1,
+            "decision": "reject",
+            "counter_price": None,
+            "message": "당신과는 거래하지 않겠소.",
+        }
+    ceiling = int(base * max_pct)
+
     if neg_id is None:
         player = repo.load_player()
         neg = repo.insert_negotiation({
@@ -47,16 +66,20 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         prior_rounds = neg["rounds"]
 
     # 서버 강제: 용사(매수자) 카운터는 "지불 의향 상한"이므로 시간에 따라 단조 비감소.
-    # 플레이어 제시가가 용사의 최고 카운터 이하면 (= 용사가 그만큼 낼 의향이 있음) 자동 수락.
     hero_prior_counters = [int(r["price"]) for r in prior_rounds
                             if r["role"] == "hero" and r.get("price") is not None]
     max_hero_counter = max(hero_prior_counters) if hero_prior_counters else None
 
-    if max_hero_counter is not None and safe_price <= max_hero_counter:
+    # Plan 3: 자동 수락 — safe_price가 호감도 ceiling 안 + prior counter 조건 만족
+    server_can_accept = (safe_price <= ceiling)
+    if max_hero_counter is not None:
+        server_can_accept = server_can_accept and (safe_price <= max_hero_counter)
+
+    if server_can_accept:
         llm = {
             "decision": "accept",
             "counter_price": None,
-            "message": f"좋소, {safe_price} 골드면 거래합시다. 약속한 대로요.",
+            "message": f"좋소, {safe_price} 골드면 거래합시다.",
         }
     else:
         from . import hero_registry as _hr
@@ -70,7 +93,13 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
                                   player_message=player_message,
                                   price_offered=safe_price,
                                   preferences=prefs,
-                                  weapon_fits=weapon_fits)
+                                  weapon_fits=weapon_fits,
+                                  # Plan 3 신규
+                                  affinity=affinity,
+                                  allowed_max_pct=max_pct,
+                                  ceiling=ceiling,
+                                  history_recent=(hero.get("history") or [])[-5:],
+                                  nickname=hero.get("nickname"))
 
     decision = llm["decision"]
     counter = llm.get("counter_price")
@@ -181,15 +210,25 @@ def finalize_sale(neg_id: int) -> None:
                        current_phase=state_machine.next_phase(player["current_phase"]))
     hero = repo.get_hero(neg["counterparty_id"])
     weapon = repo.get_weapon(neg["weapon_id"])
+
+    # Plan 3: 호감도 변화 — 합의가/시세 비율 기반
+    from . import affinity as affinity_mod
+    base = market_price(weapon)
+    ratio = neg["agreed_price"] / max(base, 1)
+    aff_delta = affinity_mod.delta_from_ratio(ratio)
+    new_affinity = affinity_mod.clamp_affinity(int(hero.get("affinity", 0)) + aff_delta)
+
     new_history = (hero["history"] or []) + [
-        {"weapon": weapon["name"], "price": neg["agreed_price"], "battle": None}
+        {"weapon": weapon["name"], "price": neg["agreed_price"], "ratio": round(ratio, 2),
+         "battle": None}
     ]
-    repo.update_hero(neg["counterparty_id"], affinity=hero["affinity"] + 5,
+    repo.update_hero(neg["counterparty_id"], affinity=new_affinity,
                      history=new_history[-5:], held_weapon_id=neg["weapon_id"])
     repo.insert_day_event(
         day=player["current_day"], phase=player["current_phase"], kind="sale",
         payload={"negotiation_id": neg_id, "weapon_id": neg["weapon_id"],
-                 "hero_id": neg["counterparty_id"], "price": neg["agreed_price"]},
+                 "hero_id": neg["counterparty_id"], "price": neg["agreed_price"],
+                 "affinity_delta": aff_delta},
     )
 
 
