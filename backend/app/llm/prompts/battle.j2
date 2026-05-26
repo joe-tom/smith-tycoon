@@ -4,5 +4,15 @@
 무기: {% if weapon %}{{ weapon.name }} (예리도 {{ weapon.sharpness }}, 희귀도 {{ weapon.rarity }}){% else %}없음(맨손){% endif %}
 적: {{ demon.type }} (난이도 {{ demon.difficulty }})
 
+전투 판정 지침 — 반드시 따를 것:
+- 용사 전투력 ≈ (근력 + 마력) + (무기 예리도 / 2 if 무기 있음 else 0)
+- 적 위협력 = 난이도
+- 전투력 ≥ 위협력 × 1.5 → 거의 항상 hero=survived + demon=killed, 무기=preserved
+- 전투력 ≈ 위협력 → hero가 survived 또는 injured 혼합, demon은 killed 또는 fled
+- 전투력 < 위협력 × 0.7 → hero가 injured 또는 died, demon이 survived 자주 발생
+- 무기 없으면 (맨손): hero 부상·사망 확률 +30%, demon survived 확률 ↑
+- 무기 예리도 < 30이면 weapon=destroyed 확률 ↑, ≥ 60이면 거의 preserved
+- 결과 코드는 위 기준을 일관되게 따르고, script는 그 결과를 자연스럽게 묘사
+
 다음 JSON 형식으로만 답하세요:
 {"script": "<뉴스 단락>", "outcomes": {"hero": "survived"|"injured"|"died", "weapon": "preserved"|"destroyed"|"none", "demon": "killed"|"fled"|"survived"}}
