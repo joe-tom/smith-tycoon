@@ -52,6 +52,9 @@ export interface Player {
   effort: number;
   current_day: number;
   current_phase: string;
+  heroes_died_total: number;
+  weapons_destroyed_total: number;
+  ending_kind: string | null;
 }
 
 export interface MerchantInventoryMaterial {
@@ -90,6 +93,7 @@ export interface StateResponse {
   weapons: Weapon[];
   hero: Hero | null;
   merchant: MerchantToday | null;
+  boss_kill_count: number;
 }
 
 export interface NegotiateResponse {

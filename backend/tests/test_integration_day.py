@@ -6,7 +6,8 @@ from app import forge, negotiation, combat, merchant
 class FakeRepo:
     def __init__(self):
         self.player = {"id": 1, "gold": 5000, "reputation": 0, "current_day": 1,
-                       "current_phase": "forge_open", "craft_power": 0}
+                       "current_phase": "forge_open", "craft_power": 0,
+                       "heroes_died_total": 0, "weapons_destroyed_total": 0, "ending_kind": None}
         self.inventory = [
             {"material_id": 1, "qty": 5, "name": "나뭇가지", "category": "일반", "attribute": "바람", "base_price": 5},
             {"material_id": 4, "qty": 5, "name": "철덩이",   "category": "일반", "attribute": "금",   "base_price": 50},

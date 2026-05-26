@@ -6,7 +6,8 @@ from app import forge, negotiation, combat
 class FakeRepo:
     def __init__(self):
         self.player = {"id": 1, "gold": 5000, "reputation": 0, "current_day": 1,
-                       "current_phase": "forge_open", "craft_power": 0}
+                       "current_phase": "forge_open", "craft_power": 0,
+                       "heroes_died_total": 0, "weapons_destroyed_total": 0, "ending_kind": None}
         self.inventory = [
             {"material_id": 1, "qty": 5, "name": "나뭇가지", "category": "일반",
              "attribute": "바람", "base_price": 5},
@@ -171,8 +172,10 @@ async def test_day_100_surt_appears_and_logs_kill_events():
         "nickname": None, "held_weapon_id": 999, "visit_count": 1,
     })
 
+    from app import endgame
     with patch.object(combat, "repo", fake), \
-         patch.object(hero_registry, "repo", fake):
+         patch.object(hero_registry, "repo", fake), \
+         patch.object(endgame, "repo", fake):
         result = await combat.run_battle(fake.player, 50, 999)
 
     # 수르트 등장은 결정론적 (day 100 + surt alive)
@@ -188,3 +191,6 @@ async def test_day_100_surt_appears_and_logs_kill_events():
         boss_kill_ev = next(e for e in fake.day_events if e["kind"] == "boss_kill")
         assert boss_kill_ev["payload"]["boss_id"] == "surt"
         assert boss_kill_ev["payload"]["boss_name"] == "수르트"
+        # 엔딩 적용 확인
+        assert fake.player["ending_kind"] == "surt_killed"
+        assert fake.player["current_phase"] == "game_over"

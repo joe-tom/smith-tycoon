@@ -15,6 +15,14 @@ def post_next_day(player: dict = Depends(current_player)):
     if player["current_phase"] != "day_summary":
         raise HTTPException(400, detail={"error": "wrong_phase",
                                           "current_phase": player["current_phase"]})
+    if player["current_day"] == 100:
+        from .. import endgame
+        defeated = repo.list_defeated_boss_ids(player["id"])
+        ending = endgame.detect_day_100(player, defeated)
+        if ending:
+            endgame.apply_ending(player["id"], ending)
+            return {"ok": True, "ending": ending,
+                    "current_day": 100, "current_phase": "game_over"}
     state_machine.advance_to_next_day(player)
     repo.update_player(player["id"], current_day=player["current_day"],
                        current_phase=player["current_phase"])

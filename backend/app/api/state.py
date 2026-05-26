@@ -50,10 +50,13 @@ def get_state(player: dict = Depends(current_player)):
                                                   "outcome": "pending"})
         merchant_today = m
 
+    boss_kill_count = len(repo.list_defeated_boss_ids(pid))
+
     return {
         "player": player,
         "inventory": inventory,
         "weapons": weapons,
         "hero": hero,
         "merchant": merchant_today,
+        "boss_kill_count": boss_kill_count,
     }
