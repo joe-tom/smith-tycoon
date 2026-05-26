@@ -63,6 +63,12 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         update["agreed_price"] = safe_price
     elif decision == "reject":
         update["outcome"] = "rejected"
+        # 거절 시 평판 -1, 무기 없이 전투 phase로 진행 (architecture.md §8.4)
+        player_now = repo.load_player()
+        repo.update_player(
+            reputation=player_now["reputation"] - 1,
+            current_phase=state_machine.next_phase(player_now["current_phase"]),
+        )
     repo.update_negotiation(neg_id, **update)
 
     return {
