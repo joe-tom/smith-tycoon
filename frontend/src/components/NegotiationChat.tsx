@@ -177,9 +177,11 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
             <button className="btn" onClick={() => setPrice((p) => p + 100)} disabled={busy}>+100</button>
             <button className="btn" onClick={() => setPrice((p) => p + 500)} disabled={busy}>+500</button>
           </div>
-          <textarea rows={2} style={{ width: "100%", marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)}
-                    placeholder="용사에게 한마디 (선택사항 — 비워두면 가격만 제시)" />
-          <div style={{ display: "flex", gap: 8 }}>
+          {negotiationStarted && (
+            <textarea rows={2} style={{ width: "100%", marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)}
+                      placeholder="용사에게 한마디 (선택사항)" />
+          )}
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button className="btn" onClick={send} disabled={busy}>
               {busy ? "..." : negotiationStarted ? "재제안" : "제안하기"}
             </button>
