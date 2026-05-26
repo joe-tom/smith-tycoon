@@ -107,3 +107,7 @@ def get_negotiation(neg_id: int) -> dict[str, Any]:
 
 def insert_battle(b: dict[str, Any]) -> dict[str, Any]:
     return _client().table("battles").insert({**b, "player_id": PLAYER_ID}).execute().data[0]
+
+
+def list_alive_heroes() -> list[dict[str, Any]]:
+    return _client().table("heroes").select("*").eq("status", "alive").execute().data

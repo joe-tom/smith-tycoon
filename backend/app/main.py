@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api import forge as forge_api
+from .api import forge as forge_api, negotiate as negotiate_api
 
 app = FastAPI(title="Smith Tycoon API")
 
@@ -12,6 +12,7 @@ app.add_middleware(
 )
 
 app.include_router(forge_api.router)
+app.include_router(negotiate_api.router)
 
 
 @app.get("/health")
