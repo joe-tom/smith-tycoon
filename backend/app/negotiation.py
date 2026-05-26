@@ -6,11 +6,15 @@ from .llm.client import complete_json
 CATEGORY_BASE = {"일반": 50, "이상한": 5, "특수": 250, "전설": 1500}
 
 
+def _material_value(m: dict[str, Any]) -> int:
+    """재료 한 항목의 값. `base_value` 명시되면 그 값을 사용 (상인 매입품 등)."""
+    if "base_value" in m and m["base_value"] is not None:
+        return int(m["base_value"])
+    return CATEGORY_BASE.get(m["category"], 50) * m.get("qty", 1)
+
+
 def market_price(weapon: dict[str, Any]) -> int:
-    mat_value = sum(
-        CATEGORY_BASE.get(m["category"], 50) * m.get("qty", 1)
-        for m in weapon["materials_used"]
-    )
+    mat_value = sum(_material_value(m) for m in weapon["materials_used"])
     rarity_mult = 1 + weapon["rarity"] / 100
     sharp_mult = 1 + weapon["sharpness"] / 200
     return max(10, int(mat_value * rarity_mult * sharp_mult))
@@ -260,12 +264,20 @@ def finalize_buy(neg_id: int) -> None:
 
     if bundle.get("weapon"):
         w = bundle["weapon"]
+        # 상인 매입품은 materials_used가 빈 배열이라 market_price 계산 시 mat_value=0이 됨.
+        # 매입가가 시세 base가 되도록 base_value를 역산해서 sentinel material entry로 저장.
+        rarity_mult = 1 + w["rarity"] / 100
+        sharp_mult = 1 + w["sharpness"] / 200
+        target = w.get("asking_price", 100)
+        base_value = max(1, int(target / max(rarity_mult * sharp_mult, 0.01)))
         repo.insert_weapon({
             "owner": "player",
             "name": w["name"], "type": w["type"], "rarity": w["rarity"],
             "sharpness": w["sharpness"], "attribute": w.get("attribute"),
             "skill": w["skill"], "str_req": w["str_req"], "mag_req": w["mag_req"],
-            "enhancement_level": 0, "materials_used": [], "created_day": player["current_day"],
+            "enhancement_level": 0,
+            "materials_used": [{"name": "상인 매입", "category": "merchant", "base_value": base_value}],
+            "created_day": player["current_day"],
         })
 
     repo.update_player(
