@@ -30,7 +30,18 @@ def get_state():
         todays = hero_registry.heroes_for_today(player["current_day"])
         idx = _hero_index(player["current_phase"])
         if idx is not None and idx < len(todays):
-            hero = {**todays[idx], "preferences": hero_registry.preferences_for(todays[idx])}
+            h = todays[idx]
+            mode = "enhance" if h.get("held_weapon_id") else "sell"
+            held_weapon = None
+            if mode == "enhance":
+                w = repo.get_weapon(h["held_weapon_id"])
+                held_weapon = {**w, "market_price": negotiation.market_price(w)}
+            hero = {
+                **h,
+                "preferences": hero_registry.preferences_for(h),
+                "mode": mode,
+                "held_weapon": held_weapon,
+            }
 
     merchant_today = None
     if player["current_phase"] == "merchant_negotiate":
