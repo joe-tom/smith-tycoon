@@ -1,4 +1,5 @@
 import type { StateResponse } from "../types";
+import { clearNickname } from "../auth";
 
 export function SidePanel({ state, onReset }: { state: StateResponse; onReset: () => void }) {
   if (!state.player) return null;
@@ -8,6 +9,7 @@ export function SidePanel({ state, onReset }: { state: StateResponse; onReset: (
       <p>일차: <strong>Day {state.player.current_day} / 5</strong></p>
       <p>금화: {state.player.gold}</p>
       <p>평판: {state.player.reputation}</p>
+      <p>노력: {state.player.effort} / 100</p>
       <p>Phase: <code>{state.player.current_phase}</code></p>
 
       <h4>인벤토리</h4>
@@ -30,6 +32,13 @@ export function SidePanel({ state, onReset }: { state: StateResponse; onReset: (
       )}
 
       <button className="btn" onClick={onReset} style={{ marginTop: 16 }}>새 게임</button>
+      <button
+        className="btn"
+        onClick={() => { clearNickname(); window.location.reload(); }}
+        style={{ marginTop: 8, marginLeft: 8 }}
+      >
+        로그아웃
+      </button>
     </div>
   );
 }
