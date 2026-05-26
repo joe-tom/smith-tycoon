@@ -11,8 +11,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!r.ok) {
-    const detail = await r.json().catch(() => ({}));
-    throw Object.assign(new Error("api_error"), { detail, status: r.status });
+    const body = await r.json().catch(() => ({} as Record<string, unknown>));
+    const detail = (body as Record<string, unknown>).detail as Record<string, unknown> | undefined;
+    const message = (detail?.message as string) || (detail?.error as string) || `api_error (${r.status})`;
+    throw Object.assign(new Error(message), { detail, status: r.status });
   }
   return r.json();
 }

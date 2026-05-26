@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../api";
 import type { MerchantToday, NegotiateResponse } from "../types";
 
@@ -28,6 +28,11 @@ export function MerchantNegotiation({
   const [last, setLast] = useState<NegotiateResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [playerGold, setPlayerGold] = useState<number>(0);
+
+  useEffect(() => {
+    api.getState().then((s) => setPlayerGold(s.player?.gold ?? 0)).catch(() => {});
+  }, []);
 
   const send = async () => {
     setBusy(true); setErr(null);
@@ -109,19 +114,30 @@ export function MerchantNegotiation({
           {last?.decision === "counter" && last.counter_price != null && (
             <div style={{ marginBottom: 12, padding: 8, background: "#fff4d6", borderRadius: 6 }}>
               <p style={{ margin: "0 0 8px" }}>상인이 <strong>{last.counter_price} 골드</strong>를 역제안했습니다.</p>
-              <button className="btn" onClick={acceptCounter} disabled={busy} style={{ marginRight: 8 }}>
+              <button className="btn" onClick={acceptCounter}
+                      disabled={busy || last.counter_price > playerGold} style={{ marginRight: 8 }}
+                      title={last.counter_price > playerGold ? "보유 금화 부족" : ""}>
                 {last.counter_price} 골드에 수락
+                {last.counter_price > playerGold && " (금화 부족)"}
               </button>
               <button className="btn" onClick={reject} disabled={busy}>거절하고 떠나기</button>
             </div>
           )}
           <div>
             <label>제시 가격:
-              <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+              <input
+                type="number"
+                value={price}
+                max={playerGold}
+                onChange={(e) => setPrice(Math.min(Number(e.target.value), playerGold))}
+              />
+              <small style={{ marginLeft: 8 }}>최대 {playerGold} 골드 (보유 금화)</small>
             </label>
           </div>
           <textarea rows={3} style={{ width: "100%" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="상인에게 한마디" />
-          <button className="btn" onClick={send} disabled={busy || !text.trim()}>{busy ? "..." : "제안하기"}</button>
+          <button className="btn" onClick={send} disabled={busy || !text.trim() || price > playerGold}>
+            {busy ? "..." : "제안하기"}
+          </button>
         </div>
       )}
       {err && <p style={{ color: "red" }}>{err}</p>}

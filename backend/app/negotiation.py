@@ -30,6 +30,7 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     hero = repo.get_hero(hero_id)
     base = market_price(weapon)
     safe_price = clamp_price(price_offered, base)
+    hero_gold = max(0, int(hero.get("gold", 0)))
 
     if neg_id is None:
         player = repo.load_player()
@@ -72,6 +73,14 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         # 용사의 새 카운터는 이전 최고 카운터보다 낮아질 수 없음 (자기 의향가 후퇴 금지)
         if max_hero_counter is not None and counter < max_hero_counter:
             counter = max_hero_counter
+        # 용사는 자기 보유 금화 이상으론 못 산다 — counter를 hero_gold로 캡
+        counter = min(counter, hero_gold)
+
+    # 플레이어 제시가가 용사 금화를 초과하고 LLM이 accept라면 강제 reject 처리
+    if decision == "accept" and safe_price > hero_gold:
+        decision = "reject"
+        llm = {**llm, "decision": "reject",
+               "message": f"미안하지만 그 가격엔 사질 못하겠소. 내가 가진 돈은 {hero_gold}골드뿐이오."}
 
     new_rounds = prior_rounds + [
         {"role": "player", "message": player_message, "price": safe_price},
@@ -202,7 +211,12 @@ async def step_buy(merchant_id: int, price_offered: int, player_message: str,
         bundle = neg["materials"]
 
     base = merchant_module.bundle_market_price(bundle)
+    player_now = repo.load_player()
+    player_gold = max(0, int(player_now.get("gold", 0)))
+    # 매수 측: 플레이어가 보유 금화 이상으로는 제안 못 함 (hard cap).
     safe_price = clamp_price(price_offered, base)
+    if safe_price > player_gold:
+        safe_price = player_gold
 
     # 서버 강제: 상인(매도자) 카운터는 "최저 수용가"이므로 시간에 따라 단조 비증가.
     # 플레이어가 상인의 최저 카운터 이상을 제시하면 자동 수락.
@@ -311,6 +325,9 @@ def player_accept_buy_counter(neg_id: int) -> int:
     if not merchant_rounds:
         raise ValueError("no merchant counter to accept")
     agreed = int(merchant_rounds[-1]["price"])
+    player = repo.load_player()
+    if agreed > int(player.get("gold", 0)):
+        raise ValueError(f"insufficient gold: need {agreed}, have {player.get('gold', 0)}")
     repo.update_negotiation(neg_id, outcome="accepted", agreed_price=agreed)
     return agreed
 
