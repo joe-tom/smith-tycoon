@@ -73,6 +73,10 @@ def post_negotiate_skip():
         state_machine.assert_phase_in(player["current_phase"], NEGOTIATE_PHASES)
     except state_machine.PhaseError:
         raise HTTPException(400, detail={"error": "wrong_phase", "current_phase": player["current_phase"]})
+    repo.insert_day_event(
+        day=player["current_day"], phase=player["current_phase"],
+        kind="skip", payload={"reason": "skipped_without_selling", "rep_delta": -1},
+    )
     repo.update_player(
         reputation=player["reputation"] - 1,
         current_phase=state_machine.next_phase(player["current_phase"]),

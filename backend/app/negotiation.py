@@ -85,6 +85,10 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         update["outcome"] = "rejected"
         # 거절 시 평판 -1, 무기 없이 전투 phase로 진행 (architecture.md §8.4)
         player_now = repo.load_player()
+        repo.insert_day_event(
+            day=player_now["current_day"], phase=player_now["current_phase"],
+            kind="reject", payload={"by": "hero", "hero_id": hero_id, "rep_delta": -1},
+        )
         repo.update_player(
             reputation=player_now["reputation"] - 1,
             current_phase=state_machine.next_phase(player_now["current_phase"]),
@@ -120,6 +124,10 @@ def player_reject(neg_id: int) -> None:
         raise ValueError(f"negotiation already {neg['outcome']}")
     repo.update_negotiation(neg_id, outcome="rejected")
     player_now = repo.load_player()
+    repo.insert_day_event(
+        day=player_now["current_day"], phase=player_now["current_phase"],
+        kind="reject", payload={"by": "player", "negotiation_id": neg_id, "rep_delta": -1},
+    )
     repo.update_player(
         reputation=player_now["reputation"] - 1,
         current_phase=state_machine.next_phase(player_now["current_phase"]),
@@ -314,6 +322,11 @@ def player_reject_buy(neg_id: int) -> None:
     repo.update_negotiation(neg_id, outcome="rejected")
     player_now = repo.load_player()
     rep_delta = -1 if neg["rounds"] else 0
+    if rep_delta != 0:
+        repo.insert_day_event(
+            day=player_now["current_day"], phase=player_now["current_phase"],
+            kind="reject", payload={"by": "player_buy", "negotiation_id": neg_id, "rep_delta": rep_delta},
+        )
     repo.update_player(
         reputation=player_now["reputation"] + rep_delta,
         current_phase=state_machine.next_phase(player_now["current_phase"]),
