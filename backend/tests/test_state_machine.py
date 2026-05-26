@@ -14,7 +14,6 @@ def test_phase_sequence():
         "forge_open", "hero1_negotiate", "hero1_battle",
         "merchant_negotiate",
         "hero2_negotiate", "hero2_battle",
-        "forge_open_2",
         "hero3_negotiate", "hero3_battle",
         "day_summary",
     ]

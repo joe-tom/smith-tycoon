@@ -137,10 +137,7 @@ async def test_day_one_golden_path():
         fake.update_player(current_phase="hero2_battle")
         b2 = await combat.run_battle(h2["id"], None)
         assert "outcomes" in b2
-        assert fake.player["current_phase"] == "forge_open_2"
-
-        # forge_open_2 skip
-        fake.update_player(current_phase="hero3_negotiate")
+        assert fake.player["current_phase"] == "hero3_negotiate"
 
         # hero3 전투 (맨손)
         fake.update_player(current_phase="hero3_battle")

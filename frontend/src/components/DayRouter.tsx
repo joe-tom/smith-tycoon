@@ -9,7 +9,7 @@ import { GameOver } from "./GameOver";
 
 const NEGOTIATE_PHASES = new Set(["hero1_negotiate", "hero2_negotiate", "hero3_negotiate"]);
 const BATTLE_PHASES = new Set(["hero1_battle", "hero2_battle", "hero3_battle"]);
-const FORGE_PHASES = new Set(["forge_open", "forge_open_2"]);
+const FORGE_PHASES = new Set(["forge_open"]);
 
 export function DayRouter({ state, refresh, onReset }: { state: StateResponse; refresh: () => void; onReset: () => void }) {
   if (!state.player) return null;

@@ -9,7 +9,6 @@ PHASES = [
     "merchant_negotiate",
     "hero2_negotiate",
     "hero2_battle",
-    "forge_open_2",
     "hero3_negotiate",
     "hero3_battle",
     "day_summary",

@@ -4,7 +4,7 @@ from ..models import ForgeRequest, WeaponOut
 
 router = APIRouter()
 
-FORGE_PHASES = ["forge_open", "forge_open_2"]
+FORGE_PHASES = ["forge_open"]
 
 
 @router.post("/forge", response_model=WeaponOut)
