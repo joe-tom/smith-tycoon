@@ -1,0 +1,12 @@
+:root { font-family: system-ui, sans-serif; color-scheme: light dark; }
+body { margin: 0; }
+.app { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+.side { padding: 16px; border-right: 1px solid #ccc; }
+.main { padding: 16px; }
+.btn { padding: 8px 16px; cursor: pointer; }
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.chat { display: flex; flex-direction: column; gap: 8px; max-height: 400px; overflow-y: auto; }
+.msg { padding: 8px; border-radius: 6px; }
+.msg.player { background: #cfe6ff; align-self: flex-end; }
+.msg.hero { background: #efefef; align-self: flex-start; }
+.material-row { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
