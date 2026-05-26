@@ -123,19 +123,24 @@ export function MerchantNegotiation({
               <button className="btn" onClick={reject} disabled={busy}>거절하고 떠나기</button>
             </div>
           )}
-          <div>
-            <label>제시 가격:
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <label>제시 가격:&nbsp;
               <input
                 type="number"
                 value={price}
                 max={playerGold}
-                onChange={(e) => setPrice(Math.min(Number(e.target.value), playerGold))}
+                onChange={(e) => setPrice(Math.min(Math.max(0, Number(e.target.value)), playerGold))}
               />
-              <small style={{ marginLeft: 8 }}>최대 {playerGold} 골드 (보유 금화)</small>
             </label>
+            <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 500))} disabled={busy}>−500</button>
+            <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 100))} disabled={busy}>−100</button>
+            <button className="btn" onClick={() => setPrice((p) => Math.min(playerGold, p + 100))} disabled={busy}>+100</button>
+            <button className="btn" onClick={() => setPrice((p) => Math.min(playerGold, p + 500))} disabled={busy}>+500</button>
+            <small>최대 {playerGold} 골드</small>
           </div>
-          <textarea rows={3} style={{ width: "100%" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="상인에게 한마디" />
-          <button className="btn" onClick={send} disabled={busy || !text.trim() || price > playerGold}>
+          <textarea rows={2} style={{ width: "100%", marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)}
+                    placeholder="상인에게 한마디 (선택사항)" />
+          <button className="btn" onClick={send} disabled={busy || price > playerGold}>
             {busy ? "..." : "제안하기"}
           </button>
         </div>

@@ -12,7 +12,7 @@
 - {{ r.role }}: "{{ r.message }}"{% if r.price %} (가격: {{ r.price }}){% endif %}
 {% endfor %}
 
-대장장이의 새 제안: "{{ player_message }}" (가격: {{ price_offered }} 골드)
+대장장이의 새 제안: {% if player_message %}"{{ player_message }}"{% else %}(말없이 가격만 제시){% endif %} (가격: {{ price_offered }} 골드)
 
 협상 지침:
 - 2~4라운드 흥정 후 결론. 첫 라운드에 reject 금지.
