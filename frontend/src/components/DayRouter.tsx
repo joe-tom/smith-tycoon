@@ -2,26 +2,39 @@ import type { StateResponse } from "../types";
 import { ForgePanel } from "./ForgePanel";
 import { NegotiationChat } from "./NegotiationChat";
 import { BattleResult } from "./BattleResult";
+import { MerchantPanel } from "./MerchantPanel";
+import { DaySummary } from "./DaySummary";
+import { GameOver } from "./GameOver";
 
-export function DayRouter({ state, refresh }: { state: StateResponse; refresh: () => void }) {
+const NEGOTIATE_PHASES = new Set(["hero1_negotiate", "hero2_negotiate", "hero3_negotiate"]);
+const BATTLE_PHASES = new Set(["hero1_battle", "hero2_battle", "hero3_battle"]);
+const FORGE_PHASES = new Set(["forge_open", "forge_open_2"]);
+
+export function DayRouter({ state, refresh, onReset }: { state: StateResponse; refresh: () => void; onReset: () => void }) {
   if (!state.player) return null;
   const phase = state.player.current_phase;
-  if (phase === "forge_open") {
+
+  if (FORGE_PHASES.has(phase)) {
     return <ForgePanel inventory={state.inventory} onDone={refresh} />;
   }
-  if (phase === "hero_negotiate") {
+  if (NEGOTIATE_PHASES.has(phase)) {
     if (!state.hero || state.weapons.length === 0) {
-      return <p>준비 안 됨 (용사 또는 무기 없음).</p>;
+      return <p>판매할 무기가 없습니다. (제작을 건너뛰셨다면 이번 협상은 무기 없이 진행됩니다.)</p>;
     }
     return <NegotiationChat hero={state.hero} weapon={state.weapons[0]} onDone={refresh} />;
   }
-  if (phase === "hero_battle") {
+  if (BATTLE_PHASES.has(phase)) {
     return <BattleResult onDone={refresh} />;
   }
-  return (
-    <div>
-      <h2>슬라이스 종료</h2>
-      <p>한 번의 vertical slice가 끝났습니다. 새 게임으로 다시 시작할 수 있습니다.</p>
-    </div>
-  );
+  if (phase === "merchant_negotiate") {
+    if (!state.merchant) return <p>상인 정보를 불러오는 중...</p>;
+    return <MerchantPanel merchant={state.merchant} onDone={refresh} />;
+  }
+  if (phase === "day_summary") {
+    return <DaySummary onDone={refresh} />;
+  }
+  if (phase === "game_over") {
+    return <GameOver onReset={onReset} />;
+  }
+  return <p>알 수 없는 phase: {phase}</p>;
 }

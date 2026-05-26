@@ -24,7 +24,7 @@ export default function App() {
     <div className="app">
       <SidePanel state={state} onReset={reset} />
       <div className="main">
-        <DayRouter state={state} refresh={refresh} />
+        <DayRouter state={state} refresh={refresh} onReset={reset} />
       </div>
     </div>
   );
