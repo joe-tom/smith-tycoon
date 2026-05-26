@@ -68,7 +68,7 @@ export function ForgePanel({ inventory, onDone }: { inventory: Material[]; onDon
       <h4>재료 선택</h4>
       {inventory.map((m) => (
         <div key={m.material_id} className="material-row">
-          <span style={{ flex: 1 }}>{m.name} <small>({m.category}{m.attribute ? ` · ${m.attribute}` : ""}, 보유 {m.qty})</small></span>
+          <span style={{ flex: 1 }}>{m.name} <small>({m.category} · {m.attribute ?? "무"}, 보유 {m.qty})</small></span>
           <button className="btn" onClick={() => change(m.material_id, -1)}>−</button>
           <span style={{ width: 24, textAlign: "center" }}>{picks[m.material_id] ?? 0}</span>
           <button className="btn" onClick={() => change(m.material_id, +1)}>+</button>

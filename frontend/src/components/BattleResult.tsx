@@ -41,14 +41,14 @@ export function BattleResult({ onDone }: { onDone: () => void }) {
           {d.is_boss ? "⚜ " : ""}
           상대: {d.type}
           {d.sin && <small> ({d.sin})</small>}
-          {d.attribute && <small> · {d.attribute}</small>}
+          <small> · {d.attribute ?? "무"}</small>
           <small> · 난이도 {d.difficulty}</small>
         </p>
       )}
       {w ? (
         <p>
           무기: <strong>{w.name}</strong> ({w.type}
-          {w.attribute ? ` · ${w.attribute}` : ""}, 예리도 {w.sharpness}, 희귀도 {w.rarity})
+ · {w.attribute ?? "무"}, 예리도 {w.sharpness}, 희귀도 {w.rarity})
           {m && <small style={{ color: m.color, marginLeft: 8 }}>{m.label}</small>}
         </p>
       ) : (

@@ -94,13 +94,13 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
     return (
       <div>
         <h2>강화 의뢰 — {hero.name}{hero.nickname ? ` "${hero.nickname}"` : ""} ({hero.job})</h2>
-        <p>용사의 무기: <strong>{weapon.name}</strong>{weapon.attribute ? <small> · {weapon.attribute}</small> : null} (예리도 {weapon.sharpness}, 희귀도 {weapon.rarity}, 강화 {weapon.enhancement_level ?? 0}회)</p>
+        <p>용사의 무기: <strong>{weapon.name}</strong> <small>· {weapon.attribute ?? "무"}</small> (예리도 {weapon.sharpness}, 희귀도 {weapon.rarity}, 강화 {weapon.enhancement_level ?? 0}회)</p>
         <p>호감도 <strong>{hero.affinity >= 0 ? "+" : ""}{hero.affinity}</strong> · 보유 금화 {hero.gold}</p>
 
         <h4>강화에 투입할 재료 선택</h4>
         {inventory.map((m) => (
           <div key={m.material_id} className="material-row">
-            <span style={{ flex: 1 }}>{m.name} <small>({m.category}{m.attribute ? ` · ${m.attribute}` : ""}, 보유 {m.qty})</small></span>
+            <span style={{ flex: 1 }}>{m.name} <small>({m.category} · {m.attribute ?? "무"}, 보유 {m.qty})</small></span>
             <button className="btn" onClick={() => change(m.material_id, -1)}>−</button>
             <span style={{ width: 24, textAlign: "center" }}>{picks[m.material_id] ?? 0}</span>
             <button className="btn" onClick={() => change(m.material_id, +1)}>+</button>
@@ -119,7 +119,7 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
   return (
     <div>
       <h2>강화 비용 협상 — {hero.name}{hero.nickname ? ` "${hero.nickname}"` : ""}</h2>
-      <p>강화 대상: <strong>{weapon.name}</strong>{weapon.attribute ? <small> · {weapon.attribute}</small> : null} (예리도 {weapon.sharpness}, 희귀도 {weapon.rarity})</p>
+      <p>강화 대상: <strong>{weapon.name}</strong> <small>· {weapon.attribute ?? "무"}</small> (예리도 {weapon.sharpness}, 희귀도 {weapon.rarity})</p>
       <p>투입 재료: {Object.entries(picks).map(([k, v]) => {
         const mat = inventory.find((m) => m.material_id === Number(k));
         return `${mat?.name ?? "?"}×${v}`;

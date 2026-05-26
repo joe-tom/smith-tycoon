@@ -16,7 +16,7 @@ export function SidePanel({ state, onReset }: { state: StateResponse; onReset: (
       <ul>
         {state.inventory.map((m) => (
           <li key={m.material_id}>
-            {m.name} × {m.qty} <small>({m.category}{m.attribute ? ` · ${m.attribute}` : ""})</small>
+            {m.name} × {m.qty} <small>({m.category} · {m.attribute ?? "무"})</small>
           </li>
         ))}
       </ul>
@@ -26,7 +26,7 @@ export function SidePanel({ state, onReset }: { state: StateResponse; onReset: (
         <ul>
           {state.weapons.map((w) => (
             <li key={w.id}>
-              {w.name} ({w.type}{w.attribute ? ` · ${w.attribute}` : ""})
+              {w.name} ({w.type} · {w.attribute ?? "무"})
               {w.market_price != null && <small> — 시세 {w.market_price}골드</small>}
             </li>
           ))}
