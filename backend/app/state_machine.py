@@ -14,7 +14,7 @@ PHASES = [
     "day_summary",
 ]
 INITIAL_PHASE = PHASES[0]
-MAX_DAY = 5
+MAX_DAY = 100
 
 
 def next_phase(current: str) -> str:

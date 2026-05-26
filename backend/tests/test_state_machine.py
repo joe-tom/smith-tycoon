@@ -42,7 +42,8 @@ def test_advance_to_next_day_increments_day_and_resets_phase():
     assert p == {"current_day": 2, "current_phase": "forge_open"}
 
 
-def test_advance_to_next_day_at_day_5_goes_to_game_over():
-    p = {"current_day": 5, "current_phase": "day_summary"}
+def test_advance_to_next_day_at_max_day_goes_to_game_over():
+    from app.state_machine import MAX_DAY
+    p = {"current_day": MAX_DAY, "current_phase": "day_summary"}
     advance_to_next_day(p)
-    assert p == {"current_day": 5, "current_phase": "game_over"}
+    assert p == {"current_day": MAX_DAY, "current_phase": "game_over"}
