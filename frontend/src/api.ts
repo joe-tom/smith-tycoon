@@ -24,5 +24,9 @@ export const api = {
     request<NegotiateResponse>("POST", "/negotiate", { weapon_id, price_offered, player_message, negotiation_id }),
   finalize: (negotiation_id: number) =>
     request<{ ok: true; next_phase: string }>("POST", "/negotiate/finalize", { negotiation_id }),
+  playerAccept: (negotiation_id: number) =>
+    request<{ ok: true; agreed_price: number; next_phase: string }>("POST", "/negotiate/player_accept", { negotiation_id }),
+  playerReject: (negotiation_id: number) =>
+    request<{ ok: true; next_phase: string }>("POST", "/negotiate/player_reject", { negotiation_id }),
   battle: () => request<BattleResponse>("POST", "/battle"),
 };

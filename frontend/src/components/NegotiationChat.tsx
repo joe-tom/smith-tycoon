@@ -37,6 +37,22 @@ export function NegotiationChat({ hero, weapon, onDone }: { hero: Hero; weapon: 
     finally { setBusy(false); }
   };
 
+  const acceptCounter = async () => {
+    if (!last) return;
+    setBusy(true);
+    try { await api.playerAccept(last.negotiation_id); onDone(); }
+    catch (e: unknown) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  const reject = async () => {
+    if (!last) return;
+    setBusy(true);
+    try { await api.playerReject(last.negotiation_id); onDone(); }
+    catch (e: unknown) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div>
       <h2>협상 — {hero.name} ({hero.job})</h2>
@@ -64,13 +80,24 @@ export function NegotiationChat({ hero, weapon, onDone }: { hero: Hero; weapon: 
         </div>
       ) : (
         <div style={{ marginTop: 16 }}>
+          {last?.decision === "counter" && last.counter_price != null && (
+            <div style={{ marginBottom: 12, padding: 8, background: "#fff4d6", borderRadius: 6 }}>
+              <p style={{ margin: "0 0 8px" }}>
+                용사가 <strong>{last.counter_price} 골드</strong>를 역제안했습니다.
+              </p>
+              <button className="btn" onClick={acceptCounter} disabled={busy} style={{ marginRight: 8 }}>
+                {last.counter_price} 골드에 수락
+              </button>
+              <button className="btn" onClick={reject} disabled={busy}>거절하고 떠나기</button>
+            </div>
+          )}
           <div>
             <label>제시 가격:
               <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
             </label>
           </div>
           <textarea rows={3} style={{ width: "100%" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="용사에게 한마디" />
-          <button className="btn" onClick={send} disabled={busy || !text.trim()}>{busy ? "..." : "제안하기"}</button>
+          <button className="btn" onClick={send} disabled={busy || !text.trim()}>{busy ? "..." : "재제안"}</button>
         </div>
       )}
       {err && <p style={{ color: "red" }}>{err}</p>}

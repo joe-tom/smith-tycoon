@@ -79,6 +79,33 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     }
 
 
+def player_accept_counter(neg_id: int) -> int:
+    """플레이어가 용사의 마지막 카운터를 수락. 합의가로 outcome=accepted 설정."""
+    neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] != "open":
+        raise ValueError(f"negotiation already {neg['outcome']}")
+    # 가장 최근 hero 라운드의 가격을 합의가로
+    hero_rounds = [r for r in neg["rounds"] if r["role"] == "hero" and r.get("price") is not None]
+    if not hero_rounds:
+        raise ValueError("no hero counter to accept")
+    agreed = int(hero_rounds[-1]["price"])
+    repo.update_negotiation(neg_id, outcome="accepted", agreed_price=agreed)
+    return agreed
+
+
+def player_reject(neg_id: int) -> None:
+    """플레이어가 협상을 결렬시킴. 평판 -1, 전투 phase로 진행."""
+    neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] != "open":
+        raise ValueError(f"negotiation already {neg['outcome']}")
+    repo.update_negotiation(neg_id, outcome="rejected")
+    player_now = repo.load_player()
+    repo.update_player(
+        reputation=player_now["reputation"] - 1,
+        current_phase=state_machine.next_phase(player_now["current_phase"]),
+    )
+
+
 def finalize_sale(neg_id: int) -> None:
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "accepted":

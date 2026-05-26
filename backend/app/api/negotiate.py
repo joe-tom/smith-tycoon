@@ -36,3 +36,26 @@ def post_finalize(req: FinalizeRequest):
         raise HTTPException(400, detail={"error": "cannot_finalize", "message": str(e)})
     player = repo.load_player()
     return {"ok": True, "next_phase": player["current_phase"]}
+
+
+@router.post("/negotiate/player_accept")
+def post_player_accept(req: FinalizeRequest):
+    """플레이어가 용사 카운터를 수락하고 거래를 즉시 확정."""
+    try:
+        agreed = negotiation.player_accept_counter(req.negotiation_id)
+        negotiation.finalize_sale(req.negotiation_id)
+    except ValueError as e:
+        raise HTTPException(400, detail={"error": "cannot_accept", "message": str(e)})
+    player = repo.load_player()
+    return {"ok": True, "agreed_price": agreed, "next_phase": player["current_phase"]}
+
+
+@router.post("/negotiate/player_reject")
+def post_player_reject(req: FinalizeRequest):
+    """플레이어가 협상 결렬 — 평판 -1, 전투 phase로."""
+    try:
+        negotiation.player_reject(req.negotiation_id)
+    except ValueError as e:
+        raise HTTPException(400, detail={"error": "cannot_reject", "message": str(e)})
+    player = repo.load_player()
+    return {"ok": True, "next_phase": player["current_phase"]}
