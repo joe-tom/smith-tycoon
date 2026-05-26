@@ -70,10 +70,13 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
                             if r["role"] == "hero" and r.get("price") is not None]
     max_hero_counter = max(hero_prior_counters) if hero_prior_counters else None
 
-    # Plan 3: 자동 수락 — safe_price가 호감도 ceiling 안 + prior counter 조건 만족
-    server_can_accept = (safe_price <= ceiling)
-    if max_hero_counter is not None:
-        server_can_accept = server_can_accept and (safe_price <= max_hero_counter)
+    # 자동 수락 — prior counter가 있을 때만 발동 (첫 라운드는 LLM 응답 필수).
+    # ceiling은 LLM 프롬프트로 안내해 LLM이 자체 판단하도록.
+    server_can_accept = (
+        max_hero_counter is not None
+        and safe_price <= max_hero_counter
+        and safe_price <= ceiling
+    )
 
     if server_can_accept:
         llm = {
@@ -203,6 +206,9 @@ def finalize_sale(neg_id: int) -> None:
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "accepted":
         raise ValueError("negotiation not accepted")
+    if neg.get("finalized"):
+        raise ValueError("already_finalized")
+    repo.update_negotiation(neg_id, finalized=True)   # 멱등성 — 우선 마킹
     player = repo.load_player()
     repo.transfer_weapon_to_hero(neg["weapon_id"], neg["counterparty_id"])
     repo.update_player(gold=player["gold"] + neg["agreed_price"],
@@ -546,6 +552,9 @@ def finalize_enhance(neg_id: int) -> None:
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "accepted":
         raise ValueError("negotiation not accepted")
+    if neg.get("finalized"):
+        raise ValueError("already_finalized")
+    repo.update_negotiation(neg_id, finalized=True)   # 멱등성 — 우선 마킹
 
     weapon = repo.get_weapon(neg["weapon_id"])
     sub_materials = neg["materials"]["selected"]
