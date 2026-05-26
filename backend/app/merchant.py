@@ -15,7 +15,7 @@ def _materials_catalog() -> list[dict[str, Any]]:
     return _MATERIALS_CATALOG
 
 
-WEAPON_TYPES = ["한손검", "양손검", "한손둔기", "양손둔기", "마법지팡이", "방패", "단도", "표창", "총"]
+WEAPON_TYPES = ["검", "둔기", "지팡이", "방패", "투척무기", "총"]
 
 # 등장 확률 가중치 (architecture.md §4 등장확률 컬럼 참고)
 CATEGORY_WEIGHT = {"일반": 10.0, "이상한": 4.0, "특수": 1.5, "전설": 0.3}

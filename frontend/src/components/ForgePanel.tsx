@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api } from "../api";
 import type { Material, Weapon } from "../types";
 
-const WEAPON_TYPES = ["한손검", "양손검", "한손둔기", "양손둔기", "마법지팡이", "방패", "단도", "표창", "총"];
+const WEAPON_TYPES = ["검", "둔기", "지팡이", "방패", "투척무기", "총"];
 
 export function ForgePanel({ inventory, onDone }: { inventory: Material[]; onDone: () => void }) {
   const [picks, setPicks] = useState<Record<number, number>>({});

@@ -8,7 +8,7 @@ class MaterialIn(BaseModel):
 
 class ForgeRequest(BaseModel):
     materials: list[MaterialIn]
-    weapon_type: str  # 한손검, 양손검, ...
+    weapon_type: str  # 검 / 둔기 / 지팡이 / 방패 / 투척무기 / 총
 
 
 class WeaponOut(BaseModel):
