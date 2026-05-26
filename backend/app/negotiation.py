@@ -90,8 +90,14 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         # 용사는 자기 보유 금화 이상으론 못 산다 — counter를 hero_gold로 캡
         counter = min(counter, hero_gold)
 
-        # LLM이 말한 가격과 서버 조정 후 가격이 다르면 메시지를 일관성 있게 교체
-        if original_counter is not None and counter != original_counter:
+        # 서버 조정 후 카운터가 player 제시가 이상 → player의 가격을 hero가 충분히 낼 수 있다는 뜻 → 자동 accept
+        if counter >= safe_price:
+            decision = "accept"
+            llm = {**llm, "decision": "accept", "counter_price": None,
+                   "message": f"좋소, {safe_price} 골드에 거래합시다."}
+            counter = None
+        elif original_counter is not None and counter != original_counter:
+            # LLM이 말한 가격과 서버 조정 후 가격이 다르면 메시지를 일관성 있게 교체
             if counter >= hero_gold:
                 llm = {**llm, "message": f"이 무기는 내 능력으론 벅차오. 가진 돈 {hero_gold} 골드까진 내겠소만 더는 무리요."}
             else:
