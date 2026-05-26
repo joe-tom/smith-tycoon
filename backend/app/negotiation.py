@@ -29,7 +29,8 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     weapon = repo.get_weapon(weapon_id)
     hero = repo.get_hero(hero_id)
     base = market_price(weapon)
-    safe_price = clamp_price(price_offered, base)
+    # 매도: 플레이어가 부르는 가격은 자유 (상한 클램프 제거). 음수만 막음.
+    safe_price = max(1, int(price_offered))
     hero_gold = max(0, int(hero.get("gold", 0)))
 
     if neg_id is None:
@@ -46,12 +47,12 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         prior_rounds = neg["rounds"]
 
     # 서버 강제: 용사(매수자) 카운터는 "지불 의향 상한"이므로 시간에 따라 단조 비감소.
-    # 플레이어가 용사의 최고 카운터 이상을 제시하면 자동 수락.
+    # 플레이어 제시가가 용사의 최고 카운터 이하면 (= 용사가 그만큼 낼 의향이 있음) 자동 수락.
     hero_prior_counters = [int(r["price"]) for r in prior_rounds
                             if r["role"] == "hero" and r.get("price") is not None]
     max_hero_counter = max(hero_prior_counters) if hero_prior_counters else None
 
-    if max_hero_counter is not None and safe_price >= max_hero_counter:
+    if max_hero_counter is not None and safe_price <= max_hero_counter:
         llm = {
             "decision": "accept",
             "counter_price": None,
