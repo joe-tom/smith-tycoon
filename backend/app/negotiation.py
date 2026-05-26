@@ -24,8 +24,9 @@ def clamp_price(price: int, base: int) -> int:
     return max(int(base * 0.1), min(int(base * 5.0), price))
 
 
-async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
+async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: int,
                     player_message: str, neg_id: int | None) -> dict[str, Any]:
+    pid = player["id"]
     weapon = repo.get_weapon(weapon_id)
     hero = repo.get_hero(hero_id)
     base = market_price(weapon)
@@ -38,12 +39,12 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     affinity = int(hero.get("affinity", 0))
     max_pct = affinity_mod.allowed_max_pct(affinity)
     if max_pct == affinity_mod.REJECT_SENTINEL:
-        player_now = repo.load_player()
+        player_now = repo.load_player(pid)
         repo.insert_day_event(
-            day=player_now["current_day"], phase=player_now["current_phase"],
+            pid, day=player_now["current_day"], phase=player_now["current_phase"],
             kind="reject", payload={"by": "hero_blacklist", "hero_id": hero_id, "rep_delta": 0},
         )
-        repo.update_player(current_phase=state_machine.next_phase(player_now["current_phase"]))
+        repo.update_player(pid, current_phase=state_machine.next_phase(player_now["current_phase"]))
         return {
             "negotiation_id": -1,
             "decision": "reject",
@@ -53,9 +54,9 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     ceiling = int(base * max_pct)
 
     if neg_id is None:
-        player = repo.load_player()
-        neg = repo.insert_negotiation({
-            "day": player["current_day"], "phase": player["current_phase"],
+        player_now2 = repo.load_player(pid)
+        neg = repo.insert_negotiation(pid, {
+            "day": player_now2["current_day"], "phase": player_now2["current_phase"],
             "kind": "sell", "counterparty_id": hero_id, "weapon_id": weapon_id,
             "rounds": [], "outcome": "open",
         })
@@ -152,12 +153,13 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     elif decision == "reject":
         update["outcome"] = "rejected"
         # 거절 시 평판 -1, 무기 없이 전투 phase로 진행 (architecture.md §8.4)
-        player_now = repo.load_player()
+        player_now = repo.load_player(pid)
         repo.insert_day_event(
-            day=player_now["current_day"], phase=player_now["current_phase"],
+            pid, day=player_now["current_day"], phase=player_now["current_phase"],
             kind="reject", payload={"by": "hero", "hero_id": hero_id, "rep_delta": -1},
         )
         repo.update_player(
+            pid,
             reputation=player_now["reputation"] - 1,
             current_phase=state_machine.next_phase(player_now["current_phase"]),
         )
@@ -171,7 +173,7 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     }
 
 
-def player_accept_counter(neg_id: int) -> int:
+def player_accept_counter(player: dict, neg_id: int) -> int:
     """플레이어가 용사의 마지막 카운터를 수락. 합의가로 outcome=accepted 설정."""
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "open":
@@ -185,35 +187,49 @@ def player_accept_counter(neg_id: int) -> int:
     return agreed
 
 
-def player_reject(neg_id: int) -> None:
+def player_reject(player: dict, neg_id: int) -> None:
     """플레이어가 협상을 결렬시킴. 평판 -1, 전투 phase로 진행."""
+    pid = player["id"]
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "open":
         raise ValueError(f"negotiation already {neg['outcome']}")
     repo.update_negotiation(neg_id, outcome="rejected")
-    player_now = repo.load_player()
+    player_now = repo.load_player(pid)
     repo.insert_day_event(
-        day=player_now["current_day"], phase=player_now["current_phase"],
+        pid, day=player_now["current_day"], phase=player_now["current_phase"],
         kind="reject", payload={"by": "player", "negotiation_id": neg_id, "rep_delta": -1},
     )
     repo.update_player(
+        pid,
         reputation=player_now["reputation"] - 1,
         current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
 
-def finalize_sale(neg_id: int) -> None:
+def finalize_sale(player: dict, neg_id: int) -> None:
+    pid = player["id"]
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "accepted":
         raise ValueError("negotiation not accepted")
     if neg.get("finalized"):
         raise ValueError("already_finalized")
     repo.update_negotiation(neg_id, finalized=True)   # 멱등성 — 우선 마킹
-    player = repo.load_player()
+    player_now = repo.load_player(pid)
     repo.transfer_weapon_to_hero(neg["weapon_id"], neg["counterparty_id"])
-    repo.update_player(gold=player["gold"] + neg["agreed_price"],
-                       reputation=player["reputation"] + 1,
-                       current_phase=state_machine.next_phase(player["current_phase"]))
+    weapon_for_recover = repo.get_weapon(neg["weapon_id"])
+    _base_for_recover = market_price(weapon_for_recover)
+    _ratio_for_recover = neg["agreed_price"] / max(_base_for_recover, 1)
+    if _ratio_for_recover >= 2.0:
+        effort_recover = 20
+    elif _ratio_for_recover >= 1.3:
+        effort_recover = 10
+    else:
+        effort_recover = 0
+    new_effort_after_sale = min(100, int(player_now.get("effort", 0)) + effort_recover)
+    repo.update_player(pid, gold=player_now["gold"] + neg["agreed_price"],
+                       reputation=player_now["reputation"] + 1,
+                       effort=new_effort_after_sale,
+                       current_phase=state_machine.next_phase(player_now["current_phase"]))
     hero = repo.get_hero(neg["counterparty_id"])
     weapon = repo.get_weapon(neg["weapon_id"])
 
@@ -231,19 +247,20 @@ def finalize_sale(neg_id: int) -> None:
     repo.update_hero(neg["counterparty_id"], affinity=new_affinity,
                      history=new_history[-5:], held_weapon_id=neg["weapon_id"])
     repo.insert_day_event(
-        day=player["current_day"], phase=player["current_phase"], kind="sale",
+        pid, day=player_now["current_day"], phase=player_now["current_phase"], kind="sale",
         payload={"negotiation_id": neg_id, "weapon_id": neg["weapon_id"],
                  "hero_id": neg["counterparty_id"], "price": neg["agreed_price"],
-                 "affinity_delta": aff_delta},
+                 "affinity_delta": aff_delta, "effort_recover": effort_recover},
     )
 
 
 # --- Plan 2: 상인 협상 (매수) ---
 
-async def step_buy(merchant_id: int, price_offered: int, player_message: str,
+async def step_buy(player: dict, merchant_id: int, price_offered: int, player_message: str,
                    neg_id: int | None,
                    selected_materials: list[dict[str, int]] | None = None,
                    select_weapon: bool = False) -> dict[str, Any]:
+    pid = player["id"]
     from . import merchant as merchant_module
 
     m_row = _client_or_repo_get_merchant(merchant_id)
@@ -269,9 +286,9 @@ async def step_buy(merchant_id: int, price_offered: int, player_message: str,
             raise ValueError("nothing selected")
         bundle = {"materials": sub_materials, "weapon": sub_weapon}
 
-        player = repo.load_player()
-        neg = repo.insert_negotiation({
-            "day": player["current_day"], "phase": player["current_phase"],
+        player_data = repo.load_player(pid)
+        neg = repo.insert_negotiation(pid, {
+            "day": player_data["current_day"], "phase": player_data["current_phase"],
             "kind": "buy", "counterparty_id": merchant_id, "weapon_id": None,
             "materials": bundle, "rounds": [], "outcome": "open",
         })
@@ -283,7 +300,7 @@ async def step_buy(merchant_id: int, price_offered: int, player_message: str,
         bundle = neg["materials"]
 
     base = merchant_module.bundle_market_price(bundle)
-    player_now = repo.load_player()
+    player_now = repo.load_player(pid)
     player_gold = max(0, int(player_now.get("gold", 0)))
     # 매수 측: 플레이어가 보유 금화 이상으로는 제안 못 함 (hard cap).
     safe_price = clamp_price(price_offered, base)
@@ -331,8 +348,8 @@ async def step_buy(merchant_id: int, price_offered: int, player_message: str,
     elif decision == "reject":
         update["outcome"] = "rejected"
         # 상인 reject 시 phase advance + merchant 정리 (평판 변화는 §7.2: 즉시 거절 0)
-        player_now = repo.load_player()
-        repo.update_player(current_phase=state_machine.next_phase(player_now["current_phase"]))
+        player_now = repo.load_player(pid)
+        repo.update_player(pid, current_phase=state_machine.next_phase(player_now["current_phase"]))
         repo.update_merchant_today(neg["counterparty_id"], outcome="done")
     repo.update_negotiation(neg_id, **update)
 
@@ -344,17 +361,18 @@ async def step_buy(merchant_id: int, price_offered: int, player_message: str,
     }
 
 
-def finalize_buy(neg_id: int) -> None:
+def finalize_buy(player: dict, neg_id: int) -> None:
+    pid = player["id"]
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "accepted":
         raise ValueError("negotiation not accepted")
-    player = repo.load_player()
-    if player["gold"] < neg["agreed_price"]:
+    player_now = repo.load_player(pid)
+    if player_now["gold"] < neg["agreed_price"]:
         raise ValueError("insufficient gold")
     bundle = neg["materials"]
 
     for m in bundle["materials"]:
-        repo.add_inventory(m["material_id"], m["qty"])
+        repo.add_inventory(pid, m["material_id"], m["qty"])
 
     if bundle.get("weapon"):
         w = bundle["weapon"]
@@ -371,25 +389,27 @@ def finalize_buy(neg_id: int) -> None:
             "skill": w["skill"], "str_req": w["str_req"], "mag_req": w["mag_req"],
             "enhancement_level": 0,
             "materials_used": [{"name": "상인 매입", "category": "merchant", "base_value": base_value}],
-            "created_day": player["current_day"],
+            "created_day": player_now["current_day"],
         })
 
     repo.update_player(
-        gold=player["gold"] - neg["agreed_price"],
-        reputation=player["reputation"] + 1,
-        current_phase=state_machine.next_phase(player["current_phase"]),
+        pid,
+        gold=player_now["gold"] - neg["agreed_price"],
+        reputation=player_now["reputation"] + 1,
+        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
     repo.update_merchant_today(neg["counterparty_id"], outcome="done")
 
     repo.insert_day_event(
-        day=player["current_day"], phase=player["current_phase"], kind="buy",
+        pid, day=player_now["current_day"], phase=player_now["current_phase"], kind="buy",
         payload={"price": neg["agreed_price"], "materials": bundle["materials"],
                  "weapon": bundle.get("weapon")},
     )
 
 
-def player_accept_buy_counter(neg_id: int) -> int:
+def player_accept_buy_counter(player: dict, neg_id: int) -> int:
+    pid = player["id"]
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "open":
         raise ValueError(f"negotiation already {neg['outcome']}")
@@ -397,26 +417,28 @@ def player_accept_buy_counter(neg_id: int) -> int:
     if not merchant_rounds:
         raise ValueError("no merchant counter to accept")
     agreed = int(merchant_rounds[-1]["price"])
-    player = repo.load_player()
-    if agreed > int(player.get("gold", 0)):
-        raise ValueError(f"insufficient gold: need {agreed}, have {player.get('gold', 0)}")
+    player_now = repo.load_player(pid)
+    if agreed > int(player_now.get("gold", 0)):
+        raise ValueError(f"insufficient gold: need {agreed}, have {player_now.get('gold', 0)}")
     repo.update_negotiation(neg_id, outcome="accepted", agreed_price=agreed)
     return agreed
 
 
-def player_reject_buy(neg_id: int) -> None:
+def player_reject_buy(player: dict, neg_id: int) -> None:
+    pid = player["id"]
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "open":
         raise ValueError(f"negotiation already {neg['outcome']}")
     repo.update_negotiation(neg_id, outcome="rejected")
-    player_now = repo.load_player()
+    player_now = repo.load_player(pid)
     rep_delta = -1 if neg["rounds"] else 0
     if rep_delta != 0:
         repo.insert_day_event(
-            day=player_now["current_day"], phase=player_now["current_phase"],
+            pid, day=player_now["current_day"], phase=player_now["current_phase"],
             kind="reject", payload={"by": "player_buy", "negotiation_id": neg_id, "rep_delta": rep_delta},
         )
     repo.update_player(
+        pid,
         reputation=player_now["reputation"] + rep_delta,
         current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
@@ -432,10 +454,11 @@ def _client_or_repo_get_merchant(merchant_id: int) -> dict[str, Any]:
 
 # --- Plan 3: 강화 협상 ---
 
-async def step_enhance(hero_id: int, price_offered: int, player_message: str,
+async def step_enhance(player: dict, hero_id: int, price_offered: int, player_message: str,
                        neg_id: int | None,
                        selected_materials: list[dict[str, int]] | None = None
                        ) -> dict[str, Any]:
+    pid = player["id"]
     from . import enhancement as enh_mod
     hero = repo.get_hero(hero_id)
     weapon_id = hero.get("held_weapon_id")
@@ -464,9 +487,9 @@ async def step_enhance(hero_id: int, price_offered: int, player_message: str,
             raise ValueError("no_materials_selected")
 
         base_estimate = enh_mod.bundle_estimate(weapon, sub_materials)
-        player = repo.load_player()
-        neg = repo.insert_negotiation({
-            "day": player["current_day"], "phase": player["current_phase"],
+        player_data = repo.load_player(pid)
+        neg = repo.insert_negotiation(pid, {
+            "day": player_data["current_day"], "phase": player_data["current_phase"],
             "kind": "enhance", "counterparty_id": hero_id, "weapon_id": weapon_id,
             "materials": {"selected": sub_materials, "base_estimate": base_estimate},
             "rounds": [], "outcome": "open",
@@ -527,13 +550,14 @@ async def step_enhance(hero_id: int, price_offered: int, player_message: str,
         update["agreed_price"] = safe_price
     elif decision == "reject":
         update["outcome"] = "rejected"
-        player_now = repo.load_player()
+        player_now = repo.load_player(pid)
         repo.insert_day_event(
-            day=player_now["current_day"], phase=player_now["current_phase"],
+            pid, day=player_now["current_day"], phase=player_now["current_phase"],
             kind="reject", payload={"by": "hero", "hero_id": hero_id, "rep_delta": -1,
                                      "context": "enhance"},
         )
         repo.update_player(
+            pid,
             reputation=player_now["reputation"] - 1,
             current_phase=state_machine.next_phase(player_now["current_phase"]),
         )
@@ -547,7 +571,8 @@ async def step_enhance(hero_id: int, price_offered: int, player_message: str,
     }
 
 
-def finalize_enhance(neg_id: int) -> None:
+def finalize_enhance(player: dict, neg_id: int) -> None:
+    pid = player["id"]
     from . import enhancement as enh_mod, affinity as aff_mod
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "accepted":
@@ -572,11 +597,12 @@ def finalize_enhance(neg_id: int) -> None:
 
     repo.deduct_materials({int(m["material_id"]): int(m["qty"]) for m in sub_materials})
 
-    player = repo.load_player()
+    player_now = repo.load_player(pid)
     repo.update_player(
-        gold=player["gold"] + neg["agreed_price"],
-        reputation=player["reputation"] + 1,
-        current_phase=state_machine.next_phase(player["current_phase"]),
+        pid,
+        gold=player_now["gold"] + neg["agreed_price"],
+        reputation=player_now["reputation"] + 1,
+        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
     ratio = neg["agreed_price"] / max(base_estimate, 1)
@@ -591,7 +617,7 @@ def finalize_enhance(neg_id: int) -> None:
                      history=new_history[-5:])
 
     repo.insert_day_event(
-        day=player["current_day"], phase=player["current_phase"], kind="enhance",
+        pid, day=player_now["current_day"], phase=player_now["current_phase"], kind="enhance",
         payload={"negotiation_id": neg_id, "weapon_id": weapon["id"],
                  "hero_id": neg["counterparty_id"],
                  "price": neg["agreed_price"], "delta": delta,
@@ -599,7 +625,7 @@ def finalize_enhance(neg_id: int) -> None:
     )
 
 
-def player_accept_enhance_counter(neg_id: int) -> int:
+def player_accept_enhance_counter(player: dict, neg_id: int) -> int:
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "open":
         raise ValueError(f"negotiation already {neg['outcome']}")
@@ -612,18 +638,20 @@ def player_accept_enhance_counter(neg_id: int) -> int:
     return agreed
 
 
-def player_reject_enhance(neg_id: int) -> None:
+def player_reject_enhance(player: dict, neg_id: int) -> None:
+    pid = player["id"]
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "open":
         raise ValueError(f"negotiation already {neg['outcome']}")
     repo.update_negotiation(neg_id, outcome="rejected")
-    player_now = repo.load_player()
+    player_now = repo.load_player(pid)
     repo.insert_day_event(
-        day=player_now["current_day"], phase=player_now["current_phase"],
+        pid, day=player_now["current_day"], phase=player_now["current_phase"],
         kind="reject", payload={"by": "player", "negotiation_id": neg_id, "rep_delta": -1,
                                  "context": "enhance"},
     )
     repo.update_player(
+        pid,
         reputation=player_now["reputation"] - 1,
         current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
