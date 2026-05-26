@@ -20,8 +20,7 @@ async def post_forge(req: ForgeRequest):
     except ValueError as e:
         raise HTTPException(400, detail={"error": "insufficient_materials", "message": str(e)})
 
-    # forge.craft가 이미 day_event를 기록함. 여기선 phase advance만.
-    repo.update_player(current_phase=state_machine.next_phase(player["current_phase"]))
+    # forge phase 동안 여러 무기 제작 가능. phase는 /forge/skip 호출로 명시적 완료.
     return weapon
 
 
