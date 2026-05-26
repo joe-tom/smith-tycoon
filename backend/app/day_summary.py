@@ -6,6 +6,7 @@ from . import repo
 def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     s: dict[str, Any] = {
         "forges": 0, "sales": 0, "buys": 0, "battles": 0,
+        "boss_kills": 0,
         "heroes_survived": 0, "heroes_injured": 0, "heroes_died": 0,
         "rep_delta": 0, "gold_delta": 0,
         # 평판 변화 항목별 누적 (UI에서 풀어쓰기 위함)
@@ -42,6 +43,8 @@ def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             d = int(p.get("rep_delta", -1))
             s["rep_delta"] += d
             s["rep_breakdown"]["reject"] += d
+        elif k == "boss_kill":
+            s["boss_kills"] += 1
     return s
 
 

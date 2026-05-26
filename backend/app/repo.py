@@ -216,3 +216,10 @@ def count_consecutive_survives(player_id: int, hero_id: int) -> int:
         else:
             break
     return count
+
+
+def list_defeated_boss_ids(player_id: int) -> set[str]:
+    """day_events에서 kind='boss_kill' payload.boss_id 모음."""
+    rows = _client().table("day_events").select("payload") \
+        .eq("player_id", player_id).eq("kind", "boss_kill").execute().data
+    return {r["payload"]["boss_id"] for r in rows if r.get("payload", {}).get("boss_id")}

@@ -45,6 +45,7 @@ class FinalizeRequest(BaseModel):
 class BattleResponse(BaseModel):
     script: str
     outcomes: dict
+    demon: dict
     next_phase: str
 
 

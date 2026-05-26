@@ -19,6 +19,15 @@ export function BattleResult({ onDone }: { onDone: () => void }) {
   return (
     <div>
       <h2>전투 결과</h2>
+      {result.demon && (
+        <p style={result.demon.is_boss ? { color: "#c00", fontWeight: "bold" } : undefined}>
+          {result.demon.is_boss ? "⚜ " : ""}
+          상대: {result.demon.type}
+          {result.demon.sin && <small> ({result.demon.sin})</small>}
+          {result.demon.attribute && <small> · {result.demon.attribute}</small>}
+          <small> · 난이도 {result.demon.difficulty}</small>
+        </p>
+      )}
       <p style={{ whiteSpace: "pre-wrap" }}>{result.script}</p>
       <ul>
         <li>용사: <strong>{result.outcomes.hero}</strong></li>

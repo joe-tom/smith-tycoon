@@ -7,7 +7,7 @@ from .llm.client import complete_json
 CATEGORY_MULT = {"일반": 1.0, "이상한": 0.5, "특수": 1.8, "전설": 3.5}
 
 # 노력 소비 가중치 (재료 개당)
-EFFORT_COST = {"일반": 1, "이상한": 1, "특수": 3, "전설": 5}
+EFFORT_COST = {"일반": 6, "이상한": 3, "특수": 10, "전설": 20}
 
 
 def effort_cost(materials_used: list[dict[str, Any]]) -> int:

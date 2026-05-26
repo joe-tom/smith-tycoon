@@ -22,3 +22,21 @@ def test_roll_demon_day_difficulty_range(day, lo, hi):
     for seed in range(30):
         d = roll_demon(day=day, seed=seed)
         assert lo <= d["difficulty"] <= hi, f"day={day} seed={seed} got {d['difficulty']}"
+
+
+def test_decide_outcomes_attribute_advantage_helps():
+    """Same hero/weapon/demon stats, but advantageous attribute → higher survival."""
+    from app.combat import decide_outcomes
+    hero = {"str": 10, "mag": 5}
+    demon_fire = {"type": "x", "attribute": "불", "difficulty": 30}
+    weapon_water = {"sharpness": 50, "rarity": 30, "attribute": "물"}  # 물→불 = 1.3
+    weapon_fire  = {"sharpness": 50, "rarity": 30, "attribute": "불"}  # 동일속성 = 1.0
+    survive_water = sum(
+        1 for s in range(50)
+        if decide_outcomes(hero, weapon_water, demon_fire, seed=s)["hero"] == "survived"
+    )
+    survive_fire = sum(
+        1 for s in range(50)
+        if decide_outcomes(hero, weapon_fire, demon_fire, seed=s)["hero"] == "survived"
+    )
+    assert survive_water > survive_fire, f"advantage={survive_water}, neutral={survive_fire}"
