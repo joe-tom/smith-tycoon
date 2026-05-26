@@ -55,7 +55,7 @@ export function DayRouter({ state, refresh, onReset }: { state: StateResponse; r
     return <DaySummary onDone={refresh} />;
   }
   if (phase === "game_over") {
-    return <GameOver onReset={onReset} />;
+    return <GameOver state={state} onReset={onReset} />;
   }
   return <p>알 수 없는 phase: {phase}</p>;
 }
