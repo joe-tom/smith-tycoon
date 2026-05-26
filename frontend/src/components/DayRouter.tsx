@@ -28,7 +28,7 @@ export function DayRouter({ state, refresh, onReset }: { state: StateResponse; r
         </div>
       );
     }
-    return <NegotiationChat hero={state.hero} weapon={state.weapons[0]} onDone={refresh} />;
+    return <NegotiationChat hero={state.hero} weapons={state.weapons} onDone={refresh} />;
   }
   if (BATTLE_PHASES.has(phase)) {
     return <BattleResult onDone={refresh} />;

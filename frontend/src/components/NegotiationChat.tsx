@@ -4,13 +4,17 @@ import type { Hero, Weapon, NegotiateResponse } from "../types";
 
 interface ChatMsg { role: "player" | "hero"; message: string; price?: number | null }
 
-export function NegotiationChat({ hero, weapon, onDone }: { hero: Hero; weapon: Weapon; onDone: () => void }) {
+export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons: Weapon[]; onDone: () => void }) {
+  const [selectedId, setSelectedId] = useState<number>(weapons[0].id);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [price, setPrice] = useState<number>(500);
   const [text, setText] = useState<string>("");
   const [last, setLast] = useState<NegotiateResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const weapon = weapons.find((w) => w.id === selectedId) ?? weapons[0];
+  const negotiationStarted = msgs.length > 0;
 
   const send = async () => {
     setBusy(true); setErr(null);
@@ -56,7 +60,20 @@ export function NegotiationChat({ hero, weapon, onDone }: { hero: Hero; weapon: 
   return (
     <div>
       <h2>협상 — {hero.name} ({hero.job})</h2>
-      <p>판매 대상 무기: <strong>{weapon.name}</strong> ({weapon.type}, 희귀도 {weapon.rarity}, 예리도 {weapon.sharpness})</p>
+
+      <div style={{ marginBottom: 8 }}>
+        <label>판매할 무기:&nbsp;
+          <select value={selectedId} onChange={(e) => setSelectedId(Number(e.target.value))} disabled={negotiationStarted}>
+            {weapons.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name} ({w.type}, 희귀도 {w.rarity}, 예리도 {w.sharpness})
+              </option>
+            ))}
+          </select>
+        </label>
+        {negotiationStarted && <small style={{ marginLeft: 8 }}>(협상 시작 후엔 변경 불가)</small>}
+      </div>
+
       <p><small>용사 기분: {hero.mood} / 성격: {hero.personality_tags.join(", ")} / 보유 금화: {hero.gold}</small></p>
 
       <div className="chat">
@@ -97,7 +114,9 @@ export function NegotiationChat({ hero, weapon, onDone }: { hero: Hero; weapon: 
             </label>
           </div>
           <textarea rows={3} style={{ width: "100%" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="용사에게 한마디" />
-          <button className="btn" onClick={send} disabled={busy || !text.trim()}>{busy ? "..." : "재제안"}</button>
+          <button className="btn" onClick={send} disabled={busy || !text.trim()}>
+            {busy ? "..." : negotiationStarted ? "재제안" : "제안하기"}
+          </button>
         </div>
       )}
       {err && <p style={{ color: "red" }}>{err}</p>}
