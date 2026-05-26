@@ -69,10 +69,29 @@ DEMONS: list[dict[str, Any]] = [
 DIFFICULTY_BY_DAY = {1: (1, 10), 2: (3, 15), 3: (8, 22), 4: (14, 30), 5: (20, 40)}
 
 
+def difficulty_range(day: int) -> tuple[int, int]:
+    """100일 난이도 곡선.
+
+    Day 1–5는 DIFFICULTY_BY_DAY의 MVP 튜닝 곡선을 그대로 사용.
+    Day 6–99는 (20,40) → (75,95) 선형 보간.
+    Day 100+은 (75, 95)로 캡.
+    """
+    if day <= 0:
+        return (1, 10)
+    if day in DIFFICULTY_BY_DAY:
+        return DIFFICULTY_BY_DAY[day]
+    if day >= 100:
+        return (75, 95)
+    t = (day - 5) / 95.0
+    lo = int(round(20 + t * 55))
+    hi = int(round(40 + t * 55))
+    return (lo, hi)
+
+
 def roll_demon(day: int = 1, seed: int | None = None) -> dict[str, Any]:
     """day의 난이도 범위와 겹치는 적 풀에서 추출하고, 교집합 구간에서 실제 난이도 결정."""
     rng = random.Random(seed)
-    day_lo, day_hi = DIFFICULTY_BY_DAY.get(day, (1, 10))
+    day_lo, day_hi = difficulty_range(day)
     eligible = [d for d in DEMONS
                 if d["difficulty"][0] <= day_hi and d["difficulty"][1] >= day_lo]
     pool = eligible or DEMONS
