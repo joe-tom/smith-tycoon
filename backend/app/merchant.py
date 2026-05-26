@@ -41,9 +41,11 @@ def _weighted_sample(rng: random.Random, items: list[dict[str, Any]], k: int) ->
     return picked
 
 
-def generate_today(day: int, seed: int | None = None) -> dict[str, Any]:
+def generate_today(player_id: int, day: int, seed: int | None = None) -> dict[str, Any]:
     """day별 상인 인벤토리 — materials 4~6종 + weapon 1개. 희소도가 높은 재료는 드물고 적게."""
-    rng = random.Random(seed if seed is not None else f"merchant-{day}")
+    if seed is None:
+        seed = (player_id * 1_000_003 + day * 31 + 7) & 0xFFFFFFFF
+    rng = random.Random(seed)
     catalog = _materials_catalog()
 
     n_materials = rng.randint(4, 6)

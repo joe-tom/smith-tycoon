@@ -30,3 +30,18 @@ def test_generate_today_has_4_to_6_materials():
     for seed in range(10):
         bundle = generate_today(day=1, seed=seed)
         assert 4 <= len(bundle["materials"]) <= 6
+
+
+def test_generate_today_per_player():
+    from app import merchant
+    a = merchant.generate_today(player_id=1, day=1)
+    b = merchant.generate_today(player_id=2, day=1)
+    # materials 또는 weapon이 한 군데라도 다름 (다른 시드)
+    assert a["materials"] != b["materials"] or a["weapon"] != b["weapon"]
+
+
+def test_generate_today_same_player_same_day_deterministic():
+    from app import merchant
+    a = merchant.generate_today(player_id=1, day=1)
+    b = merchant.generate_today(player_id=1, day=1)
+    assert a == b
