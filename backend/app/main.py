@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from .api import forge as forge_api
 
 app = FastAPI(title="Smith Tycoon API")
 
@@ -9,6 +10,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(forge_api.router)
 
 
 @app.get("/health")
