@@ -33,6 +33,25 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     # 매도: 플레이어 제시가는 용사 보유 금화 이하로만 (용사가 못 살 가격은 비현실).
     safe_price = min(max(1, int(price_offered)), max(1, hero_gold))
 
+    # Plan 3: 호감도 ≤ -50 → 즉시 거부 (협상 진입 자체 거부)
+    from . import affinity as affinity_mod
+    affinity = int(hero.get("affinity", 0))
+    max_pct = affinity_mod.allowed_max_pct(affinity)
+    if max_pct == affinity_mod.REJECT_SENTINEL:
+        player_now = repo.load_player()
+        repo.insert_day_event(
+            day=player_now["current_day"], phase=player_now["current_phase"],
+            kind="reject", payload={"by": "hero_blacklist", "hero_id": hero_id, "rep_delta": 0},
+        )
+        repo.update_player(current_phase=state_machine.next_phase(player_now["current_phase"]))
+        return {
+            "negotiation_id": -1,
+            "decision": "reject",
+            "counter_price": None,
+            "message": "당신과는 거래하지 않겠소.",
+        }
+    ceiling = int(base * max_pct)
+
     if neg_id is None:
         player = repo.load_player()
         neg = repo.insert_negotiation({
@@ -47,16 +66,23 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         prior_rounds = neg["rounds"]
 
     # 서버 강제: 용사(매수자) 카운터는 "지불 의향 상한"이므로 시간에 따라 단조 비감소.
-    # 플레이어 제시가가 용사의 최고 카운터 이하면 (= 용사가 그만큼 낼 의향이 있음) 자동 수락.
     hero_prior_counters = [int(r["price"]) for r in prior_rounds
                             if r["role"] == "hero" and r.get("price") is not None]
     max_hero_counter = max(hero_prior_counters) if hero_prior_counters else None
 
-    if max_hero_counter is not None and safe_price <= max_hero_counter:
+    # 자동 수락 — prior counter가 있을 때만 발동 (첫 라운드는 LLM 응답 필수).
+    # ceiling은 LLM 프롬프트로 안내해 LLM이 자체 판단하도록.
+    server_can_accept = (
+        max_hero_counter is not None
+        and safe_price <= max_hero_counter
+        and safe_price <= ceiling
+    )
+
+    if server_can_accept:
         llm = {
             "decision": "accept",
             "counter_price": None,
-            "message": f"좋소, {safe_price} 골드면 거래합시다. 약속한 대로요.",
+            "message": f"좋소, {safe_price} 골드면 거래합시다.",
         }
     else:
         from . import hero_registry as _hr
@@ -70,7 +96,13 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
                                   player_message=player_message,
                                   price_offered=safe_price,
                                   preferences=prefs,
-                                  weapon_fits=weapon_fits)
+                                  weapon_fits=weapon_fits,
+                                  # Plan 3 신규
+                                  affinity=affinity,
+                                  allowed_max_pct=max_pct,
+                                  ceiling=ceiling,
+                                  history_recent=(hero.get("history") or [])[-5:],
+                                  nickname=hero.get("nickname"))
 
     decision = llm["decision"]
     counter = llm.get("counter_price")
@@ -174,6 +206,9 @@ def finalize_sale(neg_id: int) -> None:
     neg = repo.get_negotiation(neg_id)
     if neg["outcome"] != "accepted":
         raise ValueError("negotiation not accepted")
+    if neg.get("finalized"):
+        raise ValueError("already_finalized")
+    repo.update_negotiation(neg_id, finalized=True)   # 멱등성 — 우선 마킹
     player = repo.load_player()
     repo.transfer_weapon_to_hero(neg["weapon_id"], neg["counterparty_id"])
     repo.update_player(gold=player["gold"] + neg["agreed_price"],
@@ -181,15 +216,25 @@ def finalize_sale(neg_id: int) -> None:
                        current_phase=state_machine.next_phase(player["current_phase"]))
     hero = repo.get_hero(neg["counterparty_id"])
     weapon = repo.get_weapon(neg["weapon_id"])
+
+    # Plan 3: 호감도 변화 — 합의가/시세 비율 기반
+    from . import affinity as affinity_mod
+    base = market_price(weapon)
+    ratio = neg["agreed_price"] / max(base, 1)
+    aff_delta = affinity_mod.delta_from_ratio(ratio)
+    new_affinity = affinity_mod.clamp_affinity(int(hero.get("affinity", 0)) + aff_delta)
+
     new_history = (hero["history"] or []) + [
-        {"weapon": weapon["name"], "price": neg["agreed_price"], "battle": None}
+        {"weapon": weapon["name"], "price": neg["agreed_price"], "ratio": round(ratio, 2),
+         "battle": None}
     ]
-    repo.update_hero(neg["counterparty_id"], affinity=hero["affinity"] + 5,
+    repo.update_hero(neg["counterparty_id"], affinity=new_affinity,
                      history=new_history[-5:], held_weapon_id=neg["weapon_id"])
     repo.insert_day_event(
         day=player["current_day"], phase=player["current_phase"], kind="sale",
         payload={"negotiation_id": neg_id, "weapon_id": neg["weapon_id"],
-                 "hero_id": neg["counterparty_id"], "price": neg["agreed_price"]},
+                 "hero_id": neg["counterparty_id"], "price": neg["agreed_price"],
+                 "affinity_delta": aff_delta},
     )
 
 
@@ -383,3 +428,202 @@ def _client_or_repo_get_merchant(merchant_id: int) -> dict[str, Any]:
     from . import repo as _repo
     c = _repo._client()
     return c.table("merchants_today").select("*").eq("id", merchant_id).single().execute().data
+
+
+# --- Plan 3: 강화 협상 ---
+
+async def step_enhance(hero_id: int, price_offered: int, player_message: str,
+                       neg_id: int | None,
+                       selected_materials: list[dict[str, int]] | None = None
+                       ) -> dict[str, Any]:
+    from . import enhancement as enh_mod
+    hero = repo.get_hero(hero_id)
+    weapon_id = hero.get("held_weapon_id")
+    if not weapon_id:
+        raise ValueError("hero has no held weapon")
+    weapon = repo.get_weapon(weapon_id)
+    hero_gold = max(0, int(hero.get("gold", 0)))
+    affinity = int(hero.get("affinity", 0))
+
+    if neg_id is None:
+        inv = repo.load_inventory()
+        inv_by_id = {row["material_id"]: row for row in inv}
+        sub_materials = []
+        for s in (selected_materials or []):
+            mid = int(s["material_id"])
+            qty = int(s.get("qty", 0))
+            if qty <= 0:
+                continue
+            row = inv_by_id.get(mid)
+            if not row or row["qty"] < qty:
+                raise ValueError(f"insufficient material {mid}")
+            sub_materials.append({"material_id": mid, "name": row["name"],
+                                  "category": row["category"],
+                                  "attribute": row["attribute"], "qty": qty})
+        if not sub_materials:
+            raise ValueError("no_materials_selected")
+
+        base_estimate = enh_mod.bundle_estimate(weapon, sub_materials)
+        player = repo.load_player()
+        neg = repo.insert_negotiation({
+            "day": player["current_day"], "phase": player["current_phase"],
+            "kind": "enhance", "counterparty_id": hero_id, "weapon_id": weapon_id,
+            "materials": {"selected": sub_materials, "base_estimate": base_estimate},
+            "rounds": [], "outcome": "open",
+        })
+        neg_id = neg["id"]
+        prior_rounds: list[dict[str, Any]] = []
+    else:
+        neg = repo.get_negotiation(neg_id)
+        prior_rounds = neg["rounds"]
+        sub_materials = neg["materials"]["selected"]
+        base_estimate = neg["materials"]["base_estimate"]
+
+    safe_price = min(max(1, int(price_offered)), hero_gold)
+
+    hero_prior_counters = [int(r["price"]) for r in prior_rounds
+                            if r["role"] == "hero" and r.get("price") is not None]
+    max_hero_counter = max(hero_prior_counters) if hero_prior_counters else None
+
+    if max_hero_counter is not None and safe_price <= max_hero_counter:
+        llm = {"decision": "accept", "counter_price": None,
+               "message": f"좋소, {safe_price} 골드에 강화 부탁합시다."}
+    else:
+        llm = await complete_json(
+            "negotiate_enhance", "enhance_accept",
+            hero=hero, weapon=weapon, materials=sub_materials,
+            base_estimate=base_estimate,
+            affinity=affinity, nickname=hero.get("nickname"),
+            prior_rounds=prior_rounds,
+            player_message=player_message,
+            price_offered=safe_price,
+        )
+
+    decision = llm["decision"]
+    counter = llm.get("counter_price")
+    if counter is not None:
+        counter = max(1, int(counter))
+        if max_hero_counter is not None and counter < max_hero_counter:
+            counter = max_hero_counter
+        counter = min(counter, hero_gold)
+        if counter >= safe_price:
+            decision = "accept"
+            llm = {**llm, "decision": "accept", "counter_price": None,
+                   "message": f"좋소, {safe_price} 골드에 강화 부탁합시다."}
+            counter = None
+
+    if decision == "accept" and safe_price > hero_gold:
+        decision = "reject"
+        llm = {**llm, "decision": "reject",
+               "message": f"내가 가진 돈은 {hero_gold}골드뿐이라 그 가격엔 못 내겠소."}
+
+    new_rounds = prior_rounds + [
+        {"role": "player", "message": player_message, "price": safe_price},
+        {"role": "hero", "message": llm["message"], "price": counter},
+    ]
+    update: dict[str, Any] = {"rounds": new_rounds}
+    if decision == "accept":
+        update["outcome"] = "accepted"
+        update["agreed_price"] = safe_price
+    elif decision == "reject":
+        update["outcome"] = "rejected"
+        player_now = repo.load_player()
+        repo.insert_day_event(
+            day=player_now["current_day"], phase=player_now["current_phase"],
+            kind="reject", payload={"by": "hero", "hero_id": hero_id, "rep_delta": -1,
+                                     "context": "enhance"},
+        )
+        repo.update_player(
+            reputation=player_now["reputation"] - 1,
+            current_phase=state_machine.next_phase(player_now["current_phase"]),
+        )
+    repo.update_negotiation(neg_id, **update)
+
+    return {
+        "negotiation_id": neg_id,
+        "decision": decision,
+        "counter_price": counter,
+        "message": llm["message"],
+    }
+
+
+def finalize_enhance(neg_id: int) -> None:
+    from . import enhancement as enh_mod, affinity as aff_mod
+    neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] != "accepted":
+        raise ValueError("negotiation not accepted")
+    if neg.get("finalized"):
+        raise ValueError("already_finalized")
+    repo.update_negotiation(neg_id, finalized=True)   # 멱등성 — 우선 마킹
+
+    weapon = repo.get_weapon(neg["weapon_id"])
+    sub_materials = neg["materials"]["selected"]
+    base_estimate = neg["materials"]["base_estimate"]
+
+    delta = enh_mod.roll_delta(sub_materials)
+    new_weapon = enh_mod.apply_to_weapon(weapon, delta, sub_materials)
+    repo.update_weapon(
+        weapon["id"],
+        sharpness=new_weapon["sharpness"],
+        rarity=new_weapon["rarity"],
+        enhancement_level=new_weapon["enhancement_level"],
+        materials_used=new_weapon["materials_used"],
+    )
+
+    repo.deduct_materials({int(m["material_id"]): int(m["qty"]) for m in sub_materials})
+
+    player = repo.load_player()
+    repo.update_player(
+        gold=player["gold"] + neg["agreed_price"],
+        reputation=player["reputation"] + 1,
+        current_phase=state_machine.next_phase(player["current_phase"]),
+    )
+
+    ratio = neg["agreed_price"] / max(base_estimate, 1)
+    aff_delta = aff_mod.delta_from_ratio(ratio)
+    hero = repo.get_hero(neg["counterparty_id"])
+    new_history = (hero["history"] or []) + [
+        {"action": "enhance", "weapon": weapon["name"], "price": neg["agreed_price"],
+         "delta": delta, "ratio": round(ratio, 2)}
+    ]
+    repo.update_hero(neg["counterparty_id"],
+                     affinity=aff_mod.clamp_affinity(int(hero.get("affinity", 0)) + aff_delta),
+                     history=new_history[-5:])
+
+    repo.insert_day_event(
+        day=player["current_day"], phase=player["current_phase"], kind="enhance",
+        payload={"negotiation_id": neg_id, "weapon_id": weapon["id"],
+                 "hero_id": neg["counterparty_id"],
+                 "price": neg["agreed_price"], "delta": delta,
+                 "affinity_delta": aff_delta},
+    )
+
+
+def player_accept_enhance_counter(neg_id: int) -> int:
+    neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] != "open":
+        raise ValueError(f"negotiation already {neg['outcome']}")
+    hero_rounds = [r for r in neg["rounds"]
+                   if r["role"] == "hero" and r.get("price") is not None]
+    if not hero_rounds:
+        raise ValueError("no hero counter to accept")
+    agreed = int(hero_rounds[-1]["price"])
+    repo.update_negotiation(neg_id, outcome="accepted", agreed_price=agreed)
+    return agreed
+
+
+def player_reject_enhance(neg_id: int) -> None:
+    neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] != "open":
+        raise ValueError(f"negotiation already {neg['outcome']}")
+    repo.update_negotiation(neg_id, outcome="rejected")
+    player_now = repo.load_player()
+    repo.insert_day_event(
+        day=player_now["current_day"], phase=player_now["current_phase"],
+        kind="reject", payload={"by": "player", "negotiation_id": neg_id, "rep_delta": -1,
+                                 "context": "enhance"},
+    )
+    repo.update_player(
+        reputation=player_now["reputation"] - 1,
+        current_phase=state_machine.next_phase(player_now["current_phase"]),
+    )

@@ -60,3 +60,15 @@ class MerchantNegotiateRequest(BaseModel):
 
 class MerchantSkipRequest(BaseModel):
     merchant_id: int
+
+
+class MaterialPick(BaseModel):
+    material_id: int
+    qty: int
+
+
+class EnhanceNegotiateRequest(BaseModel):
+    price_offered: int
+    player_message: str
+    negotiation_id: int | None = None
+    selected_materials: list[MaterialPick] | None = None

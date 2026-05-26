@@ -172,3 +172,24 @@ def list_alive_heroes_ready(day: int) -> list[dict[str, Any]]:
     c = _client()
     return c.table("heroes").select("*").eq("status", "alive") \
         .or_(f"return_day.is.null,return_day.lte.{day}").execute().data
+
+
+# --- Plan 3 ---
+
+def update_weapon(weapon_id: int, **fields: Any) -> None:
+    _client().table("weapons").update(fields).eq("id", weapon_id).execute()
+
+
+def count_consecutive_survives(hero_id: int) -> int:
+    """이 hero의 가장 최근부터 거슬러 올라가며 'hero=survived AND demon=killed'가 끊기지 않는 연속 횟수."""
+    c = _client()
+    rows = c.table("battles").select("outcomes").eq("hero_id", hero_id) \
+        .order("id", desc=True).execute().data
+    count = 0
+    for r in rows:
+        out = r.get("outcomes") or {}
+        if out.get("hero") == "survived" and out.get("demon") == "killed":
+            count += 1
+        else:
+            break
+    return count

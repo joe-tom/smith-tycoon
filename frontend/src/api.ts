@@ -64,4 +64,22 @@ export const api = {
 
   daySummary: () => request<DaySummaryResponse>("GET", "/day/summary"),
   nextDay: () => request<{ ok: true; current_day: number; current_phase: string }>("POST", "/day/next"),
+
+  enhanceNegotiate: (
+    price_offered: number,
+    player_message: string,
+    negotiation_id: number | null = null,
+    selected_materials: { material_id: number; qty: number }[] | null = null,
+  ) =>
+    request<NegotiateResponse>("POST", "/enhance/negotiate", {
+      price_offered, player_message, negotiation_id, selected_materials,
+    }),
+  enhanceFinalize: (negotiation_id: number) =>
+    request<{ ok: true; next_phase: string }>("POST", "/enhance/finalize", { negotiation_id }),
+  enhancePlayerAccept: (negotiation_id: number) =>
+    request<{ ok: true; agreed_price: number; next_phase: string }>("POST", "/enhance/player_accept", { negotiation_id }),
+  enhancePlayerReject: (negotiation_id: number) =>
+    request<{ ok: true; next_phase: string }>("POST", "/enhance/player_reject", { negotiation_id }),
+  enhanceSkip: () =>
+    request<{ ok: true; next_phase: string }>("POST", "/enhance/skip"),
 };

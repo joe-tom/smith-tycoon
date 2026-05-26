@@ -21,6 +21,24 @@
 
 대장장이의 새 제안: {% if player_message %}"{{ player_message }}"{% else %}(말없이 가격만 제시){% endif %} (가격: {{ price_offered }} 골드)
 
+{% if affinity is defined and affinity >= 20 %}
+=== 단골 정보 (호감도 {{ affinity }}{% if nickname %}, 별명 "{{ nickname }}"{% endif %}) ===
+이전 거래:
+{% for h in history_recent %}- {{ h.weapon }}을 {{ h.price }}골드에 (비율 {{ h.ratio }}){% if h.battle %} 후 {{ h.battle }}{% endif %}
+{% endfor %}
+
+당신은 이 대장장이의 단골입니다. 회상 대사("지난번 그 ○○ 잘 쓰고 있소" 등)를 자연스럽게 한 번 정도 섞으세요.
+{% elif affinity is defined and affinity <= -20 %}
+=== 단골 정보 (호감도 {{ affinity }} — 불만 상태) ===
+이전 거래에 불만이 있었던 것 같습니다. 깐깐하게 협상하세요.
+{% endif %}
+
+{% if ceiling is defined %}
+가격 허용 범위:
+- 시세 대비 {{ allowed_max_pct * 100 }}%까지 합의 가능 (= 최대 {{ ceiling }} 골드).
+- 이 한도를 넘는 가격은 절대 수락하지 마세요.
+{% endif %}
+
 협상 지침 — 반드시 따를 것:
 - 흥정의 재미를 위해 **2~4라운드** 정도는 주거니 받거니 하라. 첫 라운드부터 reject나 accept로 끝내지 말 것.
 - 가격이 시세와 큰 차이가 있어도 즉시 reject 하지 말고, **이유를 말하며 counter** 하라 (예: "그 가격은 너무 비싸오. {시세 근처} 정도면 어떻소?").

@@ -2,6 +2,7 @@ import type { StateResponse } from "../types";
 import { api } from "../api";
 import { ForgePanel } from "./ForgePanel";
 import { NegotiationChat } from "./NegotiationChat";
+import { EnhanceNegotiation } from "./EnhanceNegotiation";
 import { BattleResult } from "./BattleResult";
 import { MerchantPanel } from "./MerchantPanel";
 import { DaySummary } from "./DaySummary";
@@ -19,7 +20,20 @@ export function DayRouter({ state, refresh, onReset }: { state: StateResponse; r
     return <ForgePanel inventory={state.inventory} onDone={refresh} />;
   }
   if (NEGOTIATE_PHASES.has(phase)) {
-    if (!state.hero || state.weapons.length === 0) {
+    if (!state.hero) {
+      return <p>용사 정보를 불러오는 중...</p>;
+    }
+    if (state.hero.mode === "enhance" && state.hero.held_weapon) {
+      return (
+        <EnhanceNegotiation
+          hero={state.hero}
+          weapon={state.hero.held_weapon}
+          inventory={state.inventory}
+          onDone={refresh}
+        />
+      );
+    }
+    if (state.weapons.length === 0) {
       const skip = async () => { await api.negotiateSkip(); refresh(); };
       return (
         <div>
