@@ -15,6 +15,7 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
 
   const weapon = weapons.find((w) => w.id === selectedId) ?? weapons[0];
   const negotiationStarted = msgs.length > 0;
+  const [showFormula, setShowFormula] = useState(false);
 
   const send = async () => {
     setBusy(true); setErr(null);
@@ -75,12 +76,33 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
       </div>
 
       {weapon.market_price != null && (
-        <p style={{ margin: "4px 0" }}>
-          현재 무기 시세: <strong>{weapon.market_price} 골드</strong>
-          <small style={{ marginLeft: 8, color: "#666" }} title="시세 = 재료값 × (1 + 희귀도/100) × (1 + 예리도/200). 재료값: 일반 50, 이상한 5, 특수 250, 전설 1500 (× 수량)">
-            ⓘ 공식 보기 (hover)
-          </small>
-        </p>
+        <div style={{ margin: "4px 0" }}>
+          <p style={{ margin: 0 }}>
+            현재 무기 시세: <strong>{weapon.market_price} 골드</strong>
+            <button
+              type="button"
+              className="btn"
+              style={{ marginLeft: 8, padding: "2px 8px", fontSize: "0.85em" }}
+              onClick={() => setShowFormula((v) => !v)}
+            >
+              {showFormula ? "공식 숨기기" : "ⓘ 공식 보기"}
+            </button>
+          </p>
+          {showFormula && (
+            <pre style={{
+              margin: "6px 0", padding: 8, background: "#f3f3f3",
+              borderRadius: 6, fontSize: "0.85em", whiteSpace: "pre-wrap",
+            }}>
+{`시세 = 재료값 × (1 + 희귀도/100) × (1 + 예리도/200)
+재료값 = Σ (카테고리 단가 × 수량)
+  카테고리 단가: 일반 50, 이상한 5, 특수 250, 전설 1500
+
+이 무기: 희귀도 ${weapon.rarity}, 예리도 ${weapon.sharpness}
+계산 결과: ${weapon.market_price} 골드 (정수 내림)
+* LLM이 협상 응답할 때 이 숫자를 시세로 인용합니다.`}
+            </pre>
+          )}
+        </div>
       )}
 
       <p><small>용사 기분: {hero.mood} / 성격: {hero.personality_tags.join(", ")} / 보유 금화: {hero.gold}</small></p>
