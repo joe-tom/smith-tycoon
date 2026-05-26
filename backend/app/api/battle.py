@@ -25,6 +25,6 @@ async def post_battle():
     idx = _hero_index_for_phase(player["current_phase"])
     hero = todays[idx]
 
-    sold = repo.list_sold_weapons()
-    weapon_id = sold[-1]["id"] if sold else None
+    # 이 용사가 실제로 들고 있는 무기 (이번 phase의 협상에서 산 것). 없으면 맨손.
+    weapon_id = hero.get("held_weapon_id")
     return await combat.run_battle(hero["id"], weapon_id)

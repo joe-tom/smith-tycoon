@@ -53,6 +53,9 @@ async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
     # 'injured'는 일정상 'survived'와 동일 처리 (귀환 3일 내).
     sr_outcome = outcomes["hero"] if outcomes["hero"] in ("survived", "fled", "died") else "survived"
     fields = hero_registry.schedule_return(sr_outcome, current_day=player["current_day"])
+    # 무기 파괴 시 held_weapon_id 비움
+    if outcomes.get("weapon") == "destroyed":
+        fields["held_weapon_id"] = None
     repo.update_hero(hero_id, **fields)
 
     battle_row = repo.insert_battle({
