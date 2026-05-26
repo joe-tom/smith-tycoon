@@ -74,6 +74,7 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
 
     decision = llm["decision"]
     counter = llm.get("counter_price")
+    original_counter = int(counter) if counter is not None else None
     if counter is not None:
         counter = clamp_price(int(counter), base)
         # 용사의 새 카운터는 이전 최고 카운터보다 낮아질 수 없음 (자기 의향가 후퇴 금지)
@@ -88,6 +89,13 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
             counter = floor
         # 용사는 자기 보유 금화 이상으론 못 산다 — counter를 hero_gold로 캡
         counter = min(counter, hero_gold)
+
+        # LLM이 말한 가격과 서버 조정 후 가격이 다르면 메시지를 일관성 있게 교체
+        if original_counter is not None and counter != original_counter:
+            if counter >= hero_gold:
+                llm = {**llm, "message": f"이 무기는 내 능력으론 벅차오. 가진 돈 {hero_gold} 골드까진 내겠소만 더는 무리요."}
+            else:
+                llm = {**llm, "message": f"그 가격은 비싸오. {counter} 골드 정도면 어떻겠소?"}
 
     # 플레이어 제시가가 용사 금화를 초과하고 LLM이 accept라면 강제 reject 처리
     if decision == "accept" and safe_price > hero_gold:
