@@ -1,0 +1,22 @@
+[
+  {"id": 1,  "name": "나뭇가지",     "category": "일반",   "attribute": "바람", "base_price": 5},
+  {"id": 2,  "name": "나무판자",     "category": "일반",   "attribute": "바람", "base_price": 15},
+  {"id": 3,  "name": "원목",         "category": "일반",   "attribute": "바람", "base_price": 30},
+  {"id": 4,  "name": "철덩이",       "category": "일반",   "attribute": "금",   "base_price": 50},
+  {"id": 5,  "name": "구리",         "category": "일반",   "attribute": "금",   "base_price": 40},
+  {"id": 6,  "name": "고무",         "category": "일반",   "attribute": null,   "base_price": 20},
+  {"id": 7,  "name": "플라스틱",     "category": "일반",   "attribute": null,   "base_price": 25},
+  {"id": 8,  "name": "강철",         "category": "일반",   "attribute": "금",   "base_price": 120},
+  {"id": 9,  "name": "가죽",         "category": "일반",   "attribute": null,   "base_price": 35},
+  {"id": 10, "name": "유리",         "category": "일반",   "attribute": null,   "base_price": 30},
+  {"id": 11, "name": "다이아몬드",   "category": "특수",   "attribute": "금",   "base_price": 800},
+  {"id": 12, "name": "사파이어",     "category": "특수",   "attribute": "물",   "base_price": 600},
+  {"id": 13, "name": "금괴",         "category": "특수",   "attribute": "금",   "base_price": 1000},
+  {"id": 14, "name": "운석",         "category": "특수",   "attribute": "흙",   "base_price": 1200},
+  {"id": 15, "name": "생선뼈",       "category": "이상한", "attribute": null,   "base_price": 2},
+  {"id": 16, "name": "계란껍질",     "category": "이상한", "attribute": null,   "base_price": 1},
+  {"id": 17, "name": "담배꽁초",     "category": "이상한", "attribute": "불",   "base_price": 1},
+  {"id": 18, "name": "드래곤의 깃털","category": "전설",   "attribute": "불",   "base_price": 5000},
+  {"id": 19, "name": "테세우스의 배 조각","category": "전설","attribute": "물", "base_price": 4500},
+  {"id": 20, "name": "프로메테우스의 불","category": "전설","attribute": "불", "base_price": 6000}
+]

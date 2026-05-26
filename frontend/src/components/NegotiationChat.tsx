@@ -1,0 +1,79 @@
+import { useState } from "react";
+import { api } from "../api";
+import type { Hero, Weapon, NegotiateResponse } from "../types";
+
+interface ChatMsg { role: "player" | "hero"; message: string; price?: number | null }
+
+export function NegotiationChat({ hero, weapon, onDone }: { hero: Hero; weapon: Weapon; onDone: () => void }) {
+  const [msgs, setMsgs] = useState<ChatMsg[]>([]);
+  const [price, setPrice] = useState<number>(500);
+  const [text, setText] = useState<string>("");
+  const [last, setLast] = useState<NegotiateResponse | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const send = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const res = await api.negotiate(weapon.id, price, text);
+      setMsgs((m) => [
+        ...m,
+        { role: "player", message: text, price },
+        { role: "hero", message: res.message, price: res.counter_price },
+      ]);
+      setLast(res);
+      setText("");
+      if (res.counter_price) setPrice(res.counter_price);
+    } catch (e: unknown) {
+      setErr((e as Error).message);
+    } finally { setBusy(false); }
+  };
+
+  const accept = async () => {
+    if (!last) return;
+    setBusy(true);
+    try { await api.finalize(last.negotiation_id); onDone(); }
+    catch (e: unknown) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div>
+      <h2>협상 — {hero.name} ({hero.job})</h2>
+      <p>판매 대상 무기: <strong>{weapon.name}</strong> ({weapon.type}, 희귀도 {weapon.rarity}, 예리도 {weapon.sharpness})</p>
+      <p><small>용사 기분: {hero.mood} / 성격: {hero.personality_tags.join(", ")} / 보유 금화: {hero.gold}</small></p>
+
+      <div className="chat">
+        {msgs.map((m, i) => (
+          <div key={i} className={`msg ${m.role}`}>
+            <strong>{m.role === "player" ? "나" : hero.name}:</strong> {m.message}
+            {m.price != null && <em> ({m.price} 골드)</em>}
+          </div>
+        ))}
+      </div>
+
+      {last?.decision === "accept" ? (
+        <div style={{ marginTop: 16 }}>
+          <p>용사가 수락했습니다. 거래를 확정하시겠습니까?</p>
+          <button className="btn" onClick={accept} disabled={busy}>확정</button>
+        </div>
+      ) : last?.decision === "reject" ? (
+        <div style={{ marginTop: 16 }}>
+          <p>거래가 결렬되었습니다.</p>
+          <button className="btn" onClick={onDone}>다음으로</button>
+        </div>
+      ) : (
+        <div style={{ marginTop: 16 }}>
+          <div>
+            <label>제시 가격:
+              <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+            </label>
+          </div>
+          <textarea rows={3} style={{ width: "100%" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="용사에게 한마디" />
+          <button className="btn" onClick={send} disabled={busy || !text.trim()}>{busy ? "..." : "제안하기"}</button>
+        </div>
+      )}
+      {err && <p style={{ color: "red" }}>{err}</p>}
+    </div>
+  );
+}
