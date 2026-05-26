@@ -1,7 +1,7 @@
 from __future__ import annotations
 import random
 from typing import Any
-from . import repo, state_machine
+from . import repo, state_machine, hero_registry
 from .llm.client import complete_json
 
 DEMONS = [
@@ -49,8 +49,11 @@ async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
     repo.update_player(reputation=player["reputation"] + delta["reputation"],
                        current_phase=state_machine.next_phase(player["current_phase"]))
 
-    if outcomes["hero"] == "died":
-        repo.update_hero(hero_id, status="dead")
+    # 전투 결과별로 status·return_day 갱신.
+    # 'injured'는 일정상 'survived'와 동일 처리 (귀환 3일 내).
+    sr_outcome = outcomes["hero"] if outcomes["hero"] in ("survived", "fled", "died") else "survived"
+    fields = hero_registry.schedule_return(sr_outcome, current_day=player["current_day"])
+    repo.update_hero(hero_id, **fields)
 
     battle_row = repo.insert_battle({
         "day": player["current_day"],
