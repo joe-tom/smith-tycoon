@@ -3,6 +3,7 @@ import random
 from typing import Any
 from . import repo, state_machine, hero_registry, nickname as nickname_mod, affinity as affinity_mod
 from .llm.client import complete_json
+from .bosses import FINAL_BOSS, weakest_alive
 
 # 5행 상성 사이클: 금 → 바람 → 흙 → 물 → 불 → 금 (각 원소가 다음을 억제)
 CYCLE_NEXT = {"금": "바람", "바람": "흙", "흙": "물", "물": "불", "불": "금"}
@@ -112,9 +113,32 @@ def boss_spawn_chance(day: int) -> float:
     return 1.0
 
 
-def roll_demon(day: int = 1, seed: int | None = None) -> dict[str, Any]:
-    """day의 난이도 범위와 겹치는 적 풀에서 추출하고, 교집합 구간에서 실제 난이도 결정."""
+def roll_demon(day: int = 1, defeated_boss_ids: set[str] | None = None,
+               seed: int | None = None) -> dict[str, Any]:
+    """day의 난이도 범위와 보스 스폰 규칙을 적용해 적 1마리를 반환."""
     rng = random.Random(seed)
+    defeated = defeated_boss_ids or set()
+    surt_dead = "surt" in defeated
+    alive_mid = weakest_alive(defeated)
+
+    def _boss_to_demon(b: dict[str, Any]) -> dict[str, Any]:
+        return {"type": b["name"], "attribute": b["attribute"],
+                "difficulty": b["difficulty"],
+                "is_boss": True, "boss_id": b["boss_id"], "sin": b.get("sin")}
+
+    # day 100+ → 수르트 무조건 (살아있을 때)
+    if day >= 100 and not surt_dead:
+        return _boss_to_demon(FINAL_BOSS)
+
+    # 모든 mid-boss 처치 → 수르트 조기 등장
+    if alive_mid is None and not surt_dead:
+        return _boss_to_demon(FINAL_BOSS)
+
+    # 확률적 mid-boss
+    if alive_mid is not None and rng.random() < boss_spawn_chance(day):
+        return _boss_to_demon(alive_mid)
+
+    # 일반 적
     day_lo, day_hi = difficulty_range(day)
     eligible = [d for d in DEMONS
                 if d["difficulty"][0] <= day_hi and d["difficulty"][1] >= day_lo]
