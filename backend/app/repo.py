@@ -29,6 +29,9 @@ def get_or_create_player_by_nickname(nickname: str) -> dict[str, Any]:
         "effort": 50,
         "current_day": 1,
         "current_phase": "forge_open",
+        "heroes_died_total": 0,
+        "weapons_destroyed_total": 0,
+        "ending_kind": None,
     }).execute().data[0]
     player_id = new_player["id"]
     starting = [
@@ -53,6 +56,9 @@ def reset_game(player_id: int) -> None:
         "effort": 50,
         "current_day": 1,
         "current_phase": "forge_open",
+        "heroes_died_total": 0,
+        "weapons_destroyed_total": 0,
+        "ending_kind": None,
     }).eq("id", player_id).execute()
     # 초기 인벤토리 재시드
     starting = [
