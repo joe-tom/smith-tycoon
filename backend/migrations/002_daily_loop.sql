@@ -21,6 +21,7 @@ create table if not exists day_events (
 );
 
 alter table heroes add column if not exists held_weapon_id bigint references weapons(id);
+alter table heroes add column if not exists visit_count int not null default 0;
 
 -- RLS
 alter table players          enable row level security;

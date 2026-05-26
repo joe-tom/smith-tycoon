@@ -47,6 +47,7 @@ def generate_hero(seed: int | None = None) -> dict[str, Any]:
         "affinity": 0,
         "status": "alive",
         "history": [],
+        "visit_count": 0,
     }
 
 
@@ -69,6 +70,11 @@ def heroes_for_today(day: int, count: int = 3) -> list[dict[str, Any]]:
     for _ in range(count - len(picked)):
         h = repo.insert_hero(generate_hero())
         picked.append(h)
+    # 오늘의 로스터 첫 결정 시점에 방문 횟수 +1
+    for h in picked:
+        new_count = int(h.get("visit_count", 0)) + 1
+        repo.update_hero(h["id"], visit_count=new_count)
+        h["visit_count"] = new_count
     repo.insert_day_event(day=day, phase="forge_open", kind="hero_roster",
                           payload={"hero_ids": [h["id"] for h in picked]})
     return picked

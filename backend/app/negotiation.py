@@ -29,9 +29,9 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
     weapon = repo.get_weapon(weapon_id)
     hero = repo.get_hero(hero_id)
     base = market_price(weapon)
-    # 매도: 플레이어가 부르는 가격은 자유 (상한 클램프 제거). 음수만 막음.
-    safe_price = max(1, int(price_offered))
     hero_gold = max(0, int(hero.get("gold", 0)))
+    # 매도: 플레이어 제시가는 용사 보유 금화 이하로만 (용사가 못 살 가격은 비현실).
+    safe_price = min(max(1, int(price_offered)), max(1, hero_gold))
 
     if neg_id is None:
         player = repo.load_player()

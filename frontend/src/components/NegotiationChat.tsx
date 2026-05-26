@@ -67,7 +67,17 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
 
   return (
     <div>
-      <h2>협상 — {hero.name} ({hero.job})</h2>
+      <h2>
+        협상 — {hero.name} ({hero.job})
+        {hero.visit_count != null && hero.visit_count > 1 && (
+          <small style={{ marginLeft: 8, color: "#a06" }}>
+            · {hero.visit_count}번째 방문 {hero.visit_count > 1 ? "🔁" : ""}
+          </small>
+        )}
+        {hero.visit_count === 1 && (
+          <small style={{ marginLeft: 8, color: "#888" }}>· 첫 방문</small>
+        )}
+      </h2>
 
       <div style={{ marginBottom: 8 }}>
         <label>판매할 무기:&nbsp;
@@ -169,13 +179,14 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <label>제시 가격:&nbsp;
-              <input type="number" value={price}
-                     onChange={(e) => setPrice(Math.max(0, Number(e.target.value)))} />
+              <input type="number" value={price} max={hero.gold}
+                     onChange={(e) => setPrice(Math.min(hero.gold, Math.max(0, Number(e.target.value))))} />
             </label>
             <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 500))} disabled={busy}>−500</button>
             <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 100))} disabled={busy}>−100</button>
-            <button className="btn" onClick={() => setPrice((p) => p + 100)} disabled={busy}>+100</button>
-            <button className="btn" onClick={() => setPrice((p) => p + 500)} disabled={busy}>+500</button>
+            <button className="btn" onClick={() => setPrice((p) => Math.min(hero.gold, p + 100))} disabled={busy}>+100</button>
+            <button className="btn" onClick={() => setPrice((p) => Math.min(hero.gold, p + 500))} disabled={busy}>+500</button>
+            <small>최대 {hero.gold} 골드 (용사 보유)</small>
           </div>
           {negotiationStarted && (
             <textarea rows={2} style={{ width: "100%", marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)}

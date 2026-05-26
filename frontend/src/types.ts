@@ -36,6 +36,7 @@ export interface Hero {
   mood: string;
   personality_tags: string[];
   affinity: number;
+  visit_count?: number;
   preferences?: HeroPreferences;
 }
 
