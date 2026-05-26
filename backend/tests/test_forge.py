@@ -25,17 +25,17 @@ def test_stats_clamped_0_100():
 
 def test_effort_cost_common_one_each():
     used = [{"category": "일반", "qty": 2}, {"category": "이상한", "qty": 1}]
-    assert effort_cost(used) == 3  # 1*2 + 1*1
+    assert effort_cost(used) == 15  # 6*2 + 3*1
 
 
 def test_effort_cost_special_weighted():
     used = [{"category": "특수", "qty": 2}]
-    assert effort_cost(used) == 6  # 3*2
+    assert effort_cost(used) == 20  # 10*2
 
 
 def test_effort_cost_legendary_weighted():
     used = [{"category": "전설", "qty": 1}, {"category": "일반", "qty": 1}]
-    assert effort_cost(used) == 6  # 5 + 1
+    assert effort_cost(used) == 26  # 20 + 6
 
 
 def test_effort_penalty_zero_when_no_shortage():
