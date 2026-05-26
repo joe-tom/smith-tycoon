@@ -46,3 +46,14 @@ class BattleResponse(BaseModel):
     script: str
     outcomes: dict
     next_phase: str
+
+
+class MerchantNegotiateRequest(BaseModel):
+    merchant_id: int
+    price_offered: int
+    player_message: str
+    negotiation_id: int | None = None
+
+
+class MerchantSkipRequest(BaseModel):
+    merchant_id: int
