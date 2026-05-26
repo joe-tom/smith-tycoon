@@ -1,7 +1,7 @@
 from __future__ import annotations
 import random
 from typing import Any
-from . import repo, state_machine, hero_registry, nickname as nickname_mod, affinity as affinity_mod
+from . import repo, state_machine, hero_registry, nickname as nickname_mod, affinity as affinity_mod, endgame
 from .llm.client import complete_json
 from .bosses import FINAL_BOSS, weakest_alive
 
@@ -241,8 +241,15 @@ async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[
     if outcomes["demon"] == "killed" and demon.get("is_boss"):
         delta["reputation"] += 10
 
+    extra: dict[str, Any] = {}
+    if outcomes["hero"] == "died":
+        extra["heroes_died_total"] = int(player.get("heroes_died_total", 0)) + 1
+    if outcomes["weapon"] == "destroyed":
+        extra["weapons_destroyed_total"] = int(player.get("weapons_destroyed_total", 0)) + 1
+
     repo.update_player(pid, reputation=player["reputation"] + delta["reputation"],
-                       current_phase=state_machine.next_phase(player["current_phase"]))
+                       current_phase=state_machine.next_phase(player["current_phase"]),
+                       **extra)
 
     # 전투 결과별로 status·return_day 갱신.
     # 'injured'는 일정상 'survived'와 동일 처리 (귀환 3일 내).
@@ -300,6 +307,13 @@ async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[
                 payload={"boss_id": "surt", "boss_name": demon["type"],
                          "battle_id": battle_row["id"], "final": True},
             )
+
+    post_player = repo.load_player(pid)
+    ending = endgame.detect_post_battle(
+        post_player, repo.list_defeated_boss_ids(pid)
+    )
+    if ending:
+        endgame.apply_ending(pid, ending)
 
     return {"script": script, "outcomes": outcomes, "demon": demon,
             "next_phase": repo.load_player(pid)["current_phase"]}
