@@ -40,18 +40,34 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         neg = repo.get_negotiation(neg_id)
         prior_rounds = neg["rounds"]
 
-    fixture_name = "negotiate_accept"  # 픽스처 모드의 기본; 실제 LLM은 prompt 결과 사용
-    llm = await complete_json("negotiate_sell", fixture_name,
-                              hero=hero, weapon=weapon,
-                              market_price=base,
-                              prior_rounds=prior_rounds,
-                              player_message=player_message,
-                              price_offered=safe_price)
+    # 서버 강제: 용사(매수자) 카운터는 "지불 의향 상한"이므로 시간에 따라 단조 비감소.
+    # 플레이어가 용사의 최고 카운터 이상을 제시하면 자동 수락.
+    hero_prior_counters = [int(r["price"]) for r in prior_rounds
+                            if r["role"] == "hero" and r.get("price") is not None]
+    max_hero_counter = max(hero_prior_counters) if hero_prior_counters else None
+
+    if max_hero_counter is not None and safe_price >= max_hero_counter:
+        llm = {
+            "decision": "accept",
+            "counter_price": None,
+            "message": f"좋소, {safe_price} 골드면 거래합시다. 약속한 대로요.",
+        }
+    else:
+        fixture_name = "negotiate_accept"
+        llm = await complete_json("negotiate_sell", fixture_name,
+                                  hero=hero, weapon=weapon,
+                                  market_price=base,
+                                  prior_rounds=prior_rounds,
+                                  player_message=player_message,
+                                  price_offered=safe_price)
 
     decision = llm["decision"]
     counter = llm.get("counter_price")
     if counter is not None:
         counter = clamp_price(int(counter), base)
+        # 용사의 새 카운터는 이전 최고 카운터보다 낮아질 수 없음 (자기 의향가 후퇴 금지)
+        if max_hero_counter is not None and counter < max_hero_counter:
+            counter = max_hero_counter
 
     new_rounds = prior_rounds + [
         {"role": "player", "message": player_message, "price": safe_price},
@@ -153,19 +169,35 @@ async def step_buy(merchant_id: int, price_offered: int, player_message: str,
         neg = repo.get_negotiation(neg_id)
         prior_rounds = neg["rounds"]
 
-    llm = await complete_json(
-        "negotiate_buy", "negotiate_buy_accept",
-        materials=bundle["materials"], weapon=bundle.get("weapon"),
-        market_price=base, asking_price=base,
-        prior_rounds=prior_rounds,
-        player_message=player_message,
-        price_offered=safe_price,
-    )
+    # 서버 강제: 상인(매도자) 카운터는 "최저 수용가"이므로 시간에 따라 단조 비증가.
+    # 플레이어가 상인의 최저 카운터 이상을 제시하면 자동 수락.
+    merch_prior_counters = [int(r["price"]) for r in prior_rounds
+                             if r["role"] == "merchant" and r.get("price") is not None]
+    min_merch_counter = min(merch_prior_counters) if merch_prior_counters else None
+
+    if min_merch_counter is not None and safe_price >= min_merch_counter:
+        llm = {
+            "decision": "accept",
+            "counter_price": None,
+            "message": f"좋소, {safe_price} 골드에 드리지요. 말한 대로요.",
+        }
+    else:
+        llm = await complete_json(
+            "negotiate_buy", "negotiate_buy_accept",
+            materials=bundle["materials"], weapon=bundle.get("weapon"),
+            market_price=base, asking_price=base,
+            prior_rounds=prior_rounds,
+            player_message=player_message,
+            price_offered=safe_price,
+        )
 
     decision = llm["decision"]
     counter = llm.get("counter_price")
     if counter is not None:
         counter = clamp_price(int(counter), base)
+        # 상인의 새 카운터는 이전 최저 카운터보다 높아질 수 없음
+        if min_merch_counter is not None and counter > min_merch_counter:
+            counter = min_merch_counter
 
     new_rounds = prior_rounds + [
         {"role": "player", "message": player_message, "price": safe_price},
