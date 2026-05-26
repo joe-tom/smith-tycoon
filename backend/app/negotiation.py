@@ -595,7 +595,7 @@ def finalize_enhance(player: dict, neg_id: int) -> None:
         materials_used=new_weapon["materials_used"],
     )
 
-    repo.deduct_materials({int(m["material_id"]): int(m["qty"]) for m in sub_materials})
+    repo.deduct_materials(pid, {int(m["material_id"]): int(m["qty"]) for m in sub_materials})
 
     player_now = repo.load_player(pid)
     repo.update_player(

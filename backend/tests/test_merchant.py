@@ -21,14 +21,14 @@ def test_bundle_market_price_with_weapon():
 
 
 def test_generate_today_deterministic_with_seed():
-    a = generate_today(day=1, seed=42)
-    b = generate_today(day=1, seed=42)
+    a = generate_today(player_id=1, day=1, seed=42)
+    b = generate_today(player_id=1, day=1, seed=42)
     assert a == b
 
 
 def test_generate_today_has_4_to_6_materials():
     for seed in range(10):
-        bundle = generate_today(day=1, seed=seed)
+        bundle = generate_today(player_id=1, day=1, seed=seed)
         assert 4 <= len(bundle["materials"]) <= 6
 
 
