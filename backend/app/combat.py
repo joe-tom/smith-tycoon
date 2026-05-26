@@ -4,22 +4,85 @@ from typing import Any
 from . import repo, state_machine, hero_registry, nickname as nickname_mod, affinity as affinity_mod
 from .llm.client import complete_json
 
-DEMONS = [
-    {"type": "고블린",   "attribute": "흙"},
-    {"type": "지옥개",   "attribute": "불"},
-    {"type": "작은 영혼","attribute": "물"},
-    {"type": "임프",     "attribute": "불"},
+DEMONS: list[dict[str, Any]] = [
+    # Tier 1 — 잡몹 (난이도 1–15)
+    {"type": "고블린",         "attribute": "흙",   "difficulty": (1, 12)},
+    {"type": "지옥개",         "attribute": "불",   "difficulty": (2, 14)},
+    {"type": "작은 영혼",      "attribute": "물",   "difficulty": (1, 10)},
+    {"type": "임프",           "attribute": "불",   "difficulty": (3, 15)},
+    {"type": "슬라임",         "attribute": "물",   "difficulty": (1, 8)},
+    {"type": "박쥐",           "attribute": "바람", "difficulty": (1, 9)},
+    {"type": "좀비",           "attribute": "흙",   "difficulty": (4, 15)},
+    {"type": "스켈레톤",       "attribute": "금",   "difficulty": (3, 14)},
+    {"type": "진흙두꺼비",     "attribute": "흙",   "difficulty": (2, 12)},
+    {"type": "가시쥐",         "attribute": "흙",   "difficulty": (1, 8)},
+    {"type": "부랑광대",       "attribute": "바람", "difficulty": (3, 13)},
+    {"type": "좀나방",         "attribute": "바람", "difficulty": (1, 10)},
+    {"type": "묘지까마귀",     "attribute": "바람", "difficulty": (2, 11)},
+    {"type": "그렘린",         "attribute": "금",   "difficulty": (4, 15)},
+    {"type": "광부거미",       "attribute": "흙",   "difficulty": (3, 14)},
+
+    # Tier 2 — 중하급 (난이도 10–30)
+    {"type": "늑대인간",       "attribute": "바람", "difficulty": (12, 28)},
+    {"type": "미노타우로스 아이","attribute": "흙",   "difficulty": (15, 30)},
+    {"type": "화염도마뱀",     "attribute": "불",   "difficulty": (10, 25)},
+    {"type": "얼음 정령",      "attribute": "물",   "difficulty": (12, 28)},
+    {"type": "강철 거미",      "attribute": "금",   "difficulty": (14, 30)},
+    {"type": "들개왕",         "attribute": "바람", "difficulty": (10, 24)},
+    {"type": "흑마법사 견습",  "attribute": "불",   "difficulty": (12, 27)},
+    {"type": "부패한 기사",    "attribute": "금",   "difficulty": (15, 30)},
+    {"type": "진흙 골렘",      "attribute": "흙",   "difficulty": (13, 28)},
+    {"type": "늪지 헛것",      "attribute": "물",   "difficulty": (11, 25)},
+    {"type": "산울림",         "attribute": "바람", "difficulty": (10, 22)},
+    {"type": "인큐버스",       "attribute": "불",   "difficulty": (14, 29)},
+
+    # Tier 3 — 중급 (난이도 25–50)
+    {"type": "서큐버스",       "attribute": "불",   "difficulty": (28, 48)},
+    {"type": "케르베로스 새끼","attribute": "불",   "difficulty": (30, 50)},
+    {"type": "가고일",         "attribute": "흙",   "difficulty": (32, 50)},
+    {"type": "데몬 졸병",      "attribute": "불",   "difficulty": (28, 46)},
+    {"type": "폴터가이스트",   "attribute": "바람", "difficulty": (25, 45)},
+    {"type": "와이번 새끼",    "attribute": "바람", "difficulty": (30, 48)},
+    {"type": "거대 두꺼비",    "attribute": "물",   "difficulty": (27, 44)},
+    {"type": "강철 골렘",      "attribute": "금",   "difficulty": (33, 50)},
+    {"type": "파충류 마법사",  "attribute": "물",   "difficulty": (28, 47)},
+    {"type": "흡혈귀 시종",    "attribute": "금",   "difficulty": (30, 48)},
+
+    # Tier 4 — 상급 (난이도 45–70)
+    {"type": "와이번",         "attribute": "바람", "difficulty": (50, 68)},
+    {"type": "케르베로스",     "attribute": "불",   "difficulty": (52, 70)},
+    {"type": "진짜 데몬",      "attribute": "불",   "difficulty": (48, 68)},
+    {"type": "황금 골렘",      "attribute": "금",   "difficulty": (55, 70)},
+    {"type": "빙룡 새끼",      "attribute": "물",   "difficulty": (50, 68)},
+    {"type": "흑마법사",       "attribute": "금",   "difficulty": (48, 66)},
+    {"type": "흡혈귀",         "attribute": "금",   "difficulty": (52, 70)},
+    {"type": "미노타우로스",   "attribute": "흙",   "difficulty": (45, 65)},
+
+    # Tier 5 — 거인급 (난이도 65–95)
+    {"type": "빙룡",           "attribute": "물",   "difficulty": (70, 90)},
+    {"type": "화염 거인",      "attribute": "불",   "difficulty": (72, 92)},
+    {"type": "대지 거인",      "attribute": "흙",   "difficulty": (70, 90)},
+    {"type": "폭풍 거인",      "attribute": "바람", "difficulty": (75, 95)},
+    {"type": "강철 골렘왕",    "attribute": "금",   "difficulty": (78, 95)},
 ]
 
 DIFFICULTY_BY_DAY = {1: (1, 10), 2: (3, 15), 3: (8, 22), 4: (14, 30), 5: (20, 40)}
 
 
 def roll_demon(day: int = 1, seed: int | None = None) -> dict[str, Any]:
+    """day의 난이도 범위와 겹치는 적 풀에서 추출하고, 교집합 구간에서 실제 난이도 결정."""
     rng = random.Random(seed)
-    lo, hi = DIFFICULTY_BY_DAY.get(day, (1, 10))
-    base = rng.choice(DEMONS)
+    day_lo, day_hi = DIFFICULTY_BY_DAY.get(day, (1, 10))
+    eligible = [d for d in DEMONS
+                if d["difficulty"][0] <= day_hi and d["difficulty"][1] >= day_lo]
+    pool = eligible or DEMONS
+    base = rng.choice(pool)
+    d_lo = max(base["difficulty"][0], day_lo)
+    d_hi = min(base["difficulty"][1], day_hi)
+    if d_lo > d_hi:
+        d_lo, d_hi = day_lo, day_hi
     return {"type": base["type"], "attribute": base["attribute"],
-            "difficulty": rng.randint(lo, hi)}
+            "difficulty": rng.randint(d_lo, d_hi)}
 
 
 def apply_outcomes(outcomes: dict[str, str]) -> dict[str, int]:
