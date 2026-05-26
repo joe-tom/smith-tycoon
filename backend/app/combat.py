@@ -1,7 +1,7 @@
 from __future__ import annotations
 import random
 from typing import Any
-from . import repo, state_machine, hero_registry
+from . import repo, state_machine, hero_registry, nickname as nickname_mod, affinity as affinity_mod
 from .llm.client import complete_json
 
 DEMONS = [
@@ -112,10 +112,26 @@ async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
     # 'injured'는 일정상 'survived'와 동일 처리 (귀환 3일 내).
     sr_outcome = outcomes["hero"] if outcomes["hero"] in ("survived", "fled", "died") else "survived"
     fields = hero_registry.schedule_return(sr_outcome, current_day=player["current_day"])
-    # 무기 파괴 시 held_weapon_id 비움
+    # 무기 파괴 시 held_weapon_id 비움 + affinity -5
     if outcomes.get("weapon") == "destroyed":
         fields["held_weapon_id"] = None
+        current_aff = int(hero.get("affinity", 0))
+        fields["affinity"] = affinity_mod.clamp_affinity(current_aff - 5)
     repo.update_hero(hero_id, **fields)
+
+    # 별명 부여 트리거
+    if outcomes.get("hero") == "survived" and outcomes.get("demon") == "killed":
+        consecutive = repo.count_consecutive_survives(hero_id) + 1  # 이번 전투 포함
+        refreshed_hero = repo.get_hero(hero_id)
+        if nickname_mod.should_award(refreshed_hero, consecutive):
+            recent_demons = [demon["type"]]
+            picked = await nickname_mod.award(refreshed_hero, consecutive, recent_demons)
+            if picked:
+                repo.update_hero(hero_id, nickname=picked)
+                repo.insert_day_event(
+                    day=player["current_day"], phase=player["current_phase"],
+                    kind="nickname", payload={"hero_id": hero_id, "nickname": picked},
+                )
 
     battle_row = repo.insert_battle({
         "day": player["current_day"],

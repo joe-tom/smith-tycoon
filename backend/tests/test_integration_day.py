@@ -87,6 +87,16 @@ class FakeRepo:
         b = {**b, "id": len(self.battles) + 1, "player_id": 1}
         self.battles.append(b); return b
 
+    def count_consecutive_survives(self, hero_id: int) -> int:
+        count = 0
+        for b in reversed(self.battles):
+            if b.get("hero_id") == hero_id:
+                if b.get("outcomes", {}).get("hero") in ("survived", "injured"):
+                    count += 1
+                else:
+                    break
+        return count
+
 
 @pytest.mark.asyncio
 async def test_day_one_golden_path():
