@@ -66,13 +66,22 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
           <select value={selectedId} onChange={(e) => setSelectedId(Number(e.target.value))} disabled={negotiationStarted}>
             {weapons.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name} ({w.type}, 희귀도 {w.rarity}, 예리도 {w.sharpness})
+                {w.name} ({w.type}, 희귀도 {w.rarity}, 예리도 {w.sharpness}{w.market_price != null ? `, 시세 ${w.market_price}` : ""})
               </option>
             ))}
           </select>
         </label>
         {negotiationStarted && <small style={{ marginLeft: 8 }}>(협상 시작 후엔 변경 불가)</small>}
       </div>
+
+      {weapon.market_price != null && (
+        <p style={{ margin: "4px 0" }}>
+          현재 무기 시세: <strong>{weapon.market_price} 골드</strong>
+          <small style={{ marginLeft: 8, color: "#666" }} title="시세 = 재료값 × (1 + 희귀도/100) × (1 + 예리도/200). 재료값: 일반 50, 이상한 5, 특수 250, 전설 1500 (× 수량)">
+            ⓘ 공식 보기 (hover)
+          </small>
+        </p>
+      )}
 
       <p><small>용사 기분: {hero.mood} / 성격: {hero.personality_tags.join(", ")} / 보유 금화: {hero.gold}</small></p>
 

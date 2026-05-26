@@ -17,6 +17,7 @@ export interface Weapon {
   skill: string;
   str_req: number;
   mag_req: number;
+  market_price?: number;   // 서버 자동 계산 — /state 응답에서 채움
 }
 
 export interface Hero {

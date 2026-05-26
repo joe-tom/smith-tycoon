@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from .. import repo, hero_registry, merchant as merchant_module
+from .. import repo, hero_registry, merchant as merchant_module, negotiation
 
 router = APIRouter()
 
@@ -22,7 +22,8 @@ def get_state():
                 "hero": None, "merchant": None}
 
     inventory = repo.load_inventory()
-    weapons = repo.load_player_weapons()
+    weapons = [{**w, "market_price": negotiation.market_price(w)}
+               for w in repo.load_player_weapons()]
 
     hero = None
     if player["current_phase"] in NEGOTIATE_PHASES + BATTLE_PHASES:

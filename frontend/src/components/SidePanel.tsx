@@ -21,7 +21,10 @@ export function SidePanel({ state, onReset }: { state: StateResponse; onReset: (
       {state.weapons.length === 0 ? <p><em>(없음)</em></p> : (
         <ul>
           {state.weapons.map((w) => (
-            <li key={w.id}>{w.name} ({w.type})</li>
+            <li key={w.id}>
+              {w.name} ({w.type})
+              {w.market_price != null && <small> — 시세 {w.market_price}골드</small>}
+            </li>
           ))}
         </ul>
       )}
