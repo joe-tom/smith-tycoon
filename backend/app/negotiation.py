@@ -122,3 +122,131 @@ def finalize_sale(neg_id: int) -> None:
     ]
     repo.update_hero(neg["counterparty_id"], affinity=hero["affinity"] + 5,
                      history=new_history[-5:])
+
+
+# --- Plan 2: 상인 협상 (매수) ---
+
+async def step_buy(merchant_id: int, price_offered: int, player_message: str,
+                   neg_id: int | None) -> dict[str, Any]:
+    from . import merchant as merchant_module
+
+    m_row = _client_or_repo_get_merchant(merchant_id)
+    bundle = {"materials": m_row["materials"], "weapon": m_row.get("weapon")}
+    base = merchant_module.bundle_market_price(bundle)
+    safe_price = clamp_price(price_offered, base)
+
+    if neg_id is None:
+        player = repo.load_player()
+        neg = repo.insert_negotiation({
+            "day": player["current_day"], "phase": player["current_phase"],
+            "kind": "buy", "counterparty_id": merchant_id, "weapon_id": None,
+            "materials": bundle, "rounds": [], "outcome": "open",
+        })
+        neg_id = neg["id"]
+        prior_rounds: list[dict[str, Any]] = []
+    else:
+        neg = repo.get_negotiation(neg_id)
+        prior_rounds = neg["rounds"]
+
+    llm = await complete_json(
+        "negotiate_buy", "negotiate_buy_accept",
+        materials=bundle["materials"], weapon=bundle.get("weapon"),
+        market_price=base, asking_price=base,
+        prior_rounds=prior_rounds,
+        player_message=player_message,
+        price_offered=safe_price,
+    )
+
+    decision = llm["decision"]
+    counter = llm.get("counter_price")
+    if counter is not None:
+        counter = clamp_price(int(counter), base)
+
+    new_rounds = prior_rounds + [
+        {"role": "player", "message": player_message, "price": safe_price},
+        {"role": "merchant", "message": llm["message"], "price": counter},
+    ]
+    update: dict[str, Any] = {"rounds": new_rounds}
+    if decision == "accept":
+        update["outcome"] = "accepted"
+        update["agreed_price"] = safe_price
+    elif decision == "reject":
+        update["outcome"] = "rejected"
+    repo.update_negotiation(neg_id, **update)
+
+    return {
+        "negotiation_id": neg_id,
+        "decision": decision,
+        "counter_price": counter,
+        "message": llm["message"],
+    }
+
+
+def finalize_buy(neg_id: int) -> None:
+    neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] != "accepted":
+        raise ValueError("negotiation not accepted")
+    player = repo.load_player()
+    if player["gold"] < neg["agreed_price"]:
+        raise ValueError("insufficient gold")
+    bundle = neg["materials"]
+
+    for m in bundle["materials"]:
+        repo.add_inventory(m["material_id"], m["qty"])
+
+    if bundle.get("weapon"):
+        w = bundle["weapon"]
+        repo.insert_weapon({
+            "owner": "player",
+            "name": w["name"], "type": w["type"], "rarity": w["rarity"],
+            "sharpness": w["sharpness"], "attribute": w.get("attribute"),
+            "skill": w["skill"], "str_req": w["str_req"], "mag_req": w["mag_req"],
+            "enhancement_level": 0, "materials_used": [], "created_day": player["current_day"],
+        })
+
+    repo.update_player(
+        gold=player["gold"] - neg["agreed_price"],
+        reputation=player["reputation"] + 1,
+        current_phase=state_machine.next_phase(player["current_phase"]),
+    )
+
+    repo.update_merchant_today(neg["counterparty_id"], outcome="done")
+
+    repo.insert_day_event(
+        day=player["current_day"], phase=player["current_phase"], kind="buy",
+        payload={"price": neg["agreed_price"], "materials": bundle["materials"],
+                 "weapon": bundle.get("weapon")},
+    )
+
+
+def player_accept_buy_counter(neg_id: int) -> int:
+    neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] != "open":
+        raise ValueError(f"negotiation already {neg['outcome']}")
+    merchant_rounds = [r for r in neg["rounds"] if r["role"] == "merchant" and r.get("price") is not None]
+    if not merchant_rounds:
+        raise ValueError("no merchant counter to accept")
+    agreed = int(merchant_rounds[-1]["price"])
+    repo.update_negotiation(neg_id, outcome="accepted", agreed_price=agreed)
+    return agreed
+
+
+def player_reject_buy(neg_id: int) -> None:
+    neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] != "open":
+        raise ValueError(f"negotiation already {neg['outcome']}")
+    repo.update_negotiation(neg_id, outcome="rejected")
+    player_now = repo.load_player()
+    rep_delta = -1 if neg["rounds"] else 0
+    repo.update_player(
+        reputation=player_now["reputation"] + rep_delta,
+        current_phase=state_machine.next_phase(player_now["current_phase"]),
+    )
+    repo.update_merchant_today(neg["counterparty_id"], outcome="done")
+
+
+def _client_or_repo_get_merchant(merchant_id: int) -> dict[str, Any]:
+    """merchant_today 행 로드 헬퍼."""
+    from . import repo as _repo
+    c = _repo._client()
+    return c.table("merchants_today").select("*").eq("id", merchant_id).single().execute().data
