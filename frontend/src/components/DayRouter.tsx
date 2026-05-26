@@ -23,8 +23,8 @@ export function DayRouter({ state, refresh, onReset }: { state: StateResponse; r
       const skip = async () => { await api.negotiateSkip(); refresh(); };
       return (
         <div>
-          <p>판매할 무기가 없습니다. 무기 없이 전투로 진행할 수 있습니다.</p>
-          <button className="btn" onClick={skip}>건너뛰기 (전투로)</button>
+          <p>판매할 무기가 없습니다. 무기 없이 전투로 진행할 수 있습니다. (용사를 빈손으로 보내는 것이라 평판 -1)</p>
+          <button className="btn" onClick={skip}>건너뛰기 (전투로, 평판 -1)</button>
         </div>
       );
     }

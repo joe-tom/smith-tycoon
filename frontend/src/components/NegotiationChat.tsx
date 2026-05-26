@@ -158,8 +158,8 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
             </button>
             {!negotiationStarted && (
               <button className="btn" onClick={skipWithoutSelling} disabled={busy}
-                      title="이번엔 팔지 않고 다음 단계(전투)로">
-                팔지 않고 건너뛰기
+                      title="용사 무시·다음 단계로. 평판 -1">
+                팔지 않고 건너뛰기 (평판 -1)
               </button>
             )}
           </div>
