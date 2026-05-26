@@ -153,6 +153,8 @@ def decide_outcomes(hero: dict[str, Any], weapon: dict[str, Any] | None,
     """전투 결과 코드를 결정 — power/threat 비율 + 노이즈 기반."""
     rng = random.Random(seed)
     power = hero_power(hero, weapon)
+    weapon_attr = weapon.get("attribute") if weapon else None
+    power *= attribute_bonus(weapon_attr, demon.get("attribute"))
     threat = demon_threat(demon)
     ratio = (power / threat) * rng.uniform(0.75, 1.25)
 
