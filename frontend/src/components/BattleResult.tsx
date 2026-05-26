@@ -1,12 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { BattleResponse } from "../types";
 
 export function BattleResult({ onDone }: { onDone: () => void }) {
   const [result, setResult] = useState<BattleResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const ranRef = useRef(false);
 
   useEffect(() => {
+    if (ranRef.current) return;  // StrictMode dev double-invoke 방지
+    ranRef.current = true;
     api.battle().then(setResult).catch((e) => setErr(e.message));
   }, []);
 
