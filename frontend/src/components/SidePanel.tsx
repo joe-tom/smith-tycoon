@@ -5,6 +5,7 @@ export function SidePanel({ state, onReset }: { state: StateResponse; onReset: (
   return (
     <div className="side">
       <h3>플레이어</h3>
+      <p>일차: <strong>Day {state.player.current_day} / 5</strong></p>
       <p>금화: {state.player.gold}</p>
       <p>평판: {state.player.reputation}</p>
       <p>Phase: <code>{state.player.current_phase}</code></p>

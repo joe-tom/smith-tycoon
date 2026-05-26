@@ -33,6 +33,13 @@ export function ForgePanel({ inventory, onDone }: { inventory: Material[]; onDon
     } finally { setBusy(false); }
   };
 
+  const skip = async () => {
+    setBusy(true); setErr(null);
+    try { await api.forgeSkip(); onDone(); }
+    catch (e: unknown) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div>
       <h2>제작</h2>
@@ -53,9 +60,10 @@ export function ForgePanel({ inventory, onDone }: { inventory: Material[]; onDon
         </div>
       ))}
 
-      <button className="btn" onClick={submit} disabled={busy} style={{ marginTop: 16 }}>
-        {busy ? "제작 중..." : "제작하기"}
-      </button>
+      <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+        <button className="btn" onClick={submit} disabled={busy}>{busy ? "제작 중..." : "제작하기"}</button>
+        <button className="btn" onClick={skip} disabled={busy}>건너뛰기</button>
+      </div>
       {err && <p style={{ color: "red" }}>{err}</p>}
     </div>
   );
