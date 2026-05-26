@@ -111,3 +111,7 @@ def insert_battle(b: dict[str, Any]) -> dict[str, Any]:
 
 def list_alive_heroes() -> list[dict[str, Any]]:
     return _client().table("heroes").select("*").eq("status", "alive").execute().data
+
+
+def list_sold_weapons() -> list[dict[str, Any]]:
+    return _client().table("weapons").select("*").eq("owner", "sold").order("id").execute().data
