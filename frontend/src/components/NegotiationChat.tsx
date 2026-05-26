@@ -58,6 +58,13 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
     finally { setBusy(false); }
   };
 
+  const skipWithoutSelling = async () => {
+    setBusy(true); setErr(null);
+    try { await api.negotiateSkip(); onDone(); }
+    catch (e: unknown) { setErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div>
       <h2>협상 — {hero.name} ({hero.job})</h2>
@@ -145,9 +152,17 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
             </label>
           </div>
           <textarea rows={3} style={{ width: "100%" }} value={text} onChange={(e) => setText(e.target.value)} placeholder="용사에게 한마디" />
-          <button className="btn" onClick={send} disabled={busy || !text.trim()}>
-            {busy ? "..." : negotiationStarted ? "재제안" : "제안하기"}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn" onClick={send} disabled={busy || !text.trim()}>
+              {busy ? "..." : negotiationStarted ? "재제안" : "제안하기"}
+            </button>
+            {!negotiationStarted && (
+              <button className="btn" onClick={skipWithoutSelling} disabled={busy}
+                      title="이번엔 팔지 않고 다음 단계(전투)로">
+                팔지 않고 건너뛰기
+              </button>
+            )}
+          </div>
         </div>
       )}
       {err && <p style={{ color: "red" }}>{err}</p>}
