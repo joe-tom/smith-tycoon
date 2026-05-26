@@ -68,10 +68,10 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
   return (
     <div>
       <h2>
-        협상 — {hero.name} ({hero.job})
+        협상 — {hero.name}{hero.nickname ? ` "${hero.nickname}"` : ""} ({hero.job})
         {hero.visit_count != null && hero.visit_count > 1 && (
           <small style={{ marginLeft: 8, color: "#a06" }}>
-            · {hero.visit_count}번째 방문 {hero.visit_count > 1 ? "🔁" : ""}
+            · {hero.visit_count}번째 방문 🔁
           </small>
         )}
         {hero.visit_count === 1 && (
@@ -122,7 +122,12 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
         </div>
       )}
 
-      <p><small>용사 기분: {hero.mood} / 성격: {hero.personality_tags.join(", ")} / 보유 금화: {hero.gold} / 근력 {hero.str}·마력 {hero.mag}</small></p>
+      <p><small>
+        용사 기분: {hero.mood} / 성격: {hero.personality_tags.join(", ")} / 보유 금화: {hero.gold} / 근력 {hero.str}·마력 {hero.mag}
+        {" / "}호감도 <strong style={{
+          color: hero.affinity >= 20 ? "#0a6" : hero.affinity <= -20 ? "#a30" : "#666"
+        }}>{hero.affinity >= 0 ? "+" : ""}{hero.affinity}</strong>
+      </small></p>
 
       {hero.preferences && (
         <div style={{
