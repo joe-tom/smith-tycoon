@@ -122,6 +122,11 @@ def finalize_sale(neg_id: int) -> None:
     ]
     repo.update_hero(neg["counterparty_id"], affinity=hero["affinity"] + 5,
                      history=new_history[-5:])
+    repo.insert_day_event(
+        day=player["current_day"], phase=player["current_phase"], kind="sale",
+        payload={"negotiation_id": neg_id, "weapon_id": neg["weapon_id"],
+                 "hero_id": neg["counterparty_id"], "price": neg["agreed_price"]},
+    )
 
 
 # --- Plan 2: 상인 협상 (매수) ---

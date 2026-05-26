@@ -69,4 +69,11 @@ async def craft(weapon_type: str, material_qty: dict[int, int]) -> dict[str, Any
         "materials_used": materials_used,
         "created_day": player["current_day"],
     })
+    repo.insert_day_event(
+        player["current_day"],
+        player.get("current_phase", "forge_open"),
+        "forge",
+        {"weapon_id": weapon["id"], "name": name, "type": weapon_type,
+         "rarity": stats["rarity"], "sharpness": stats["sharpness"]},
+    )
     return weapon
