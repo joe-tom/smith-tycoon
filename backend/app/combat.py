@@ -103,6 +103,15 @@ def difficulty_range(day: int) -> tuple[int, int]:
     return (lo, hi)
 
 
+def boss_spawn_chance(day: int) -> float:
+    """전투당 보스 스폰 확률."""
+    if day < 40: return 0.0
+    if day < 60: return 0.05
+    if day < 80: return 0.10
+    if day < 90: return 0.25
+    return 1.0
+
+
 def roll_demon(day: int = 1, seed: int | None = None) -> dict[str, Any]:
     """day의 난이도 범위와 겹치는 적 풀에서 추출하고, 교집합 구간에서 실제 난이도 결정."""
     rng = random.Random(seed)
