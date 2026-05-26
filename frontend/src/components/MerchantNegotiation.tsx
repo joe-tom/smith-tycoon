@@ -4,14 +4,26 @@ import type { MerchantToday, NegotiateResponse } from "../types";
 
 interface ChatMsg { role: "player" | "merchant"; message: string; price?: number | null }
 
-export function MerchantNegotiation({ merchant, onDone }: { merchant: MerchantToday; onDone: () => void }) {
-  const baseTotal = merchant.materials.reduce((s, m) => s + m.asking_price, 0)
-                  + (merchant.weapon?.asking_price ?? 0);
+interface SelectedMaterial {
+  material_id: number;
+  qty: number;
+  name: string;
+  asking_price: number;
+}
 
+export function MerchantNegotiation({
+  merchant, selectedMaterials, selectWeapon, selectedTotal, onDone,
+}: {
+  merchant: MerchantToday;
+  selectedMaterials: SelectedMaterial[];
+  selectWeapon: boolean;
+  selectedTotal: number;
+  onDone: () => void;
+}) {
   const [msgs, setMsgs] = useState<ChatMsg[]>([
-    { role: "merchant", message: `이 묶음 ${baseTotal} 골드는 어떻소?`, price: baseTotal },
+    { role: "merchant", message: `이 묶음 ${selectedTotal} 골드는 어떻소?`, price: selectedTotal },
   ]);
-  const [price, setPrice] = useState<number>(Math.floor(baseTotal * 0.7));
+  const [price, setPrice] = useState<number>(Math.max(1, Math.floor(selectedTotal * 0.7)));
   const [text, setText] = useState<string>("");
   const [last, setLast] = useState<NegotiateResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -20,7 +32,12 @@ export function MerchantNegotiation({ merchant, onDone }: { merchant: MerchantTo
   const send = async () => {
     setBusy(true); setErr(null);
     try {
-      const res = await api.merchantNegotiate(merchant.id, price, text, last?.negotiation_id ?? null);
+      const isFirst = last === null;
+      const res = await api.merchantNegotiate(
+        merchant.id, price, text, last?.negotiation_id ?? null,
+        isFirst ? selectedMaterials.map((m) => ({ material_id: m.material_id, qty: m.qty })) : null,
+        isFirst ? selectWeapon : false,
+      );
       setMsgs((m) => [...m,
         { role: "player", message: text, price },
         { role: "merchant", message: res.message, price: res.counter_price }]);
@@ -58,7 +75,15 @@ export function MerchantNegotiation({ merchant, onDone }: { merchant: MerchantTo
   return (
     <div>
       <h2>상인 협상</h2>
-      <p>묶음 시세: {baseTotal} 골드</p>
+      <p>협상 묶음 (선택 합계 시세: <strong>{selectedTotal} 골드</strong>):</p>
+      <ul>
+        {selectedMaterials.map((m) => (
+          <li key={m.material_id}>{m.name} × {m.qty} — {m.asking_price} 골드</li>
+        ))}
+        {selectWeapon && merchant.weapon && (
+          <li>{merchant.weapon.name} ({merchant.weapon.type}) — {merchant.weapon.asking_price} 골드</li>
+        )}
+      </ul>
 
       <div className="chat">
         {msgs.map((m, i) => (

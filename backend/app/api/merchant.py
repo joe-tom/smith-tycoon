@@ -25,8 +25,16 @@ async def post_merchant_negotiate(req: MerchantNegotiateRequest):
     if m["id"] != req.merchant_id:
         raise HTTPException(400, detail={"error": "merchant_mismatch"})
 
-    result = await negotiation.step_buy(m["id"], req.price_offered, req.player_message,
-                                         neg_id=req.negotiation_id)
+    selected = [s.model_dump() for s in (req.selected_materials or [])]
+    try:
+        result = await negotiation.step_buy(
+            m["id"], req.price_offered, req.player_message,
+            neg_id=req.negotiation_id,
+            selected_materials=selected if req.negotiation_id is None else None,
+            select_weapon=req.select_weapon,
+        )
+    except ValueError as e:
+        raise HTTPException(400, detail={"error": "selection_invalid", "message": str(e)})
     return result
 
 

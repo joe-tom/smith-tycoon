@@ -53,6 +53,9 @@ class MerchantNegotiateRequest(BaseModel):
     price_offered: int
     player_message: str
     negotiation_id: int | None = None
+    # 첫 라운드에만 사용 — 이후 라운드는 협상에 저장된 묶음을 사용
+    selected_materials: list[MaterialIn] | None = None
+    select_weapon: bool = False
 
 
 class MerchantSkipRequest(BaseModel):

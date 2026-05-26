@@ -148,15 +148,34 @@ def finalize_sale(neg_id: int) -> None:
 # --- Plan 2: 상인 협상 (매수) ---
 
 async def step_buy(merchant_id: int, price_offered: int, player_message: str,
-                   neg_id: int | None) -> dict[str, Any]:
+                   neg_id: int | None,
+                   selected_materials: list[dict[str, int]] | None = None,
+                   select_weapon: bool = False) -> dict[str, Any]:
     from . import merchant as merchant_module
 
     m_row = _client_or_repo_get_merchant(merchant_id)
-    bundle = {"materials": m_row["materials"], "weapon": m_row.get("weapon")}
-    base = merchant_module.bundle_market_price(bundle)
-    safe_price = clamp_price(price_offered, base)
 
     if neg_id is None:
+        # 첫 라운드 — selection으로 sub-bundle 구성
+        full_materials = m_row["materials"]
+        sel_map = {s["material_id"]: int(s["qty"]) for s in (selected_materials or [])
+                   if int(s.get("qty", 0)) > 0}
+        sub_materials = []
+        for m in full_materials:
+            q = sel_map.get(m["material_id"], 0)
+            if q <= 0:
+                continue
+            if q > m["qty"]:
+                raise ValueError(f"selected qty {q} exceeds available {m['qty']} for material {m['material_id']}")
+            scaled = dict(m)
+            scaled["qty"] = q
+            scaled["asking_price"] = int(m["asking_price"] * q / m["qty"])
+            sub_materials.append(scaled)
+        sub_weapon = m_row.get("weapon") if select_weapon else None
+        if not sub_materials and sub_weapon is None:
+            raise ValueError("nothing selected")
+        bundle = {"materials": sub_materials, "weapon": sub_weapon}
+
         player = repo.load_player()
         neg = repo.insert_negotiation({
             "day": player["current_day"], "phase": player["current_phase"],
@@ -168,6 +187,10 @@ async def step_buy(merchant_id: int, price_offered: int, player_message: str,
     else:
         neg = repo.get_negotiation(neg_id)
         prior_rounds = neg["rounds"]
+        bundle = neg["materials"]
+
+    base = merchant_module.bundle_market_price(bundle)
+    safe_price = clamp_price(price_offered, base)
 
     # 서버 강제: 상인(매도자) 카운터는 "최저 수용가"이므로 시간에 따라 단조 비증가.
     # 플레이어가 상인의 최저 카운터 이상을 제시하면 자동 수락.

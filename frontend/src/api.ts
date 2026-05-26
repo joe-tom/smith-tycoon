@@ -39,8 +39,18 @@ export const api = {
 
   battle: () => request<BattleResponse>("POST", "/battle"),
 
-  merchantNegotiate: (merchant_id: number, price_offered: number, player_message: string, negotiation_id: number | null = null) =>
-    request<NegotiateResponse>("POST", "/merchant/negotiate", { merchant_id, price_offered, player_message, negotiation_id }),
+  merchantNegotiate: (
+    merchant_id: number,
+    price_offered: number,
+    player_message: string,
+    negotiation_id: number | null = null,
+    selected_materials: { material_id: number; qty: number }[] | null = null,
+    select_weapon: boolean = false,
+  ) =>
+    request<NegotiateResponse>("POST", "/merchant/negotiate", {
+      merchant_id, price_offered, player_message, negotiation_id,
+      selected_materials, select_weapon,
+    }),
   merchantFinalize: (negotiation_id: number) =>
     request<{ ok: true; next_phase: string }>("POST", "/merchant/negotiate/finalize", { negotiation_id }),
   merchantPlayerAccept: (negotiation_id: number) =>
