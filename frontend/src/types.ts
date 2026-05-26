@@ -38,6 +38,10 @@ export interface Hero {
   affinity: number;
   visit_count?: number;
   preferences?: HeroPreferences;
+  // Plan 3 신규
+  nickname?: string | null;
+  mode?: "sell" | "enhance";
+  held_weapon?: Weapon | null;
 }
 
 export interface Player {
