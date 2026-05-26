@@ -51,6 +51,14 @@ function formatEvent(e: DayEvent): string {
       if (by === "player_buy") return `상인 협상 결렬${repTag(rep)}`;
       return `협상 거절${repTag(rep)}`;
     }
+    case "boss_kill": {
+      const p = e.payload as { boss_name?: string; sin?: string };
+      return `⚜ 보스 처치: ${p.boss_name ?? ""}${p.sin ? ` (${p.sin})` : ""}`;
+    }
+    case "surt_kill": {
+      const p = e.payload as { boss_name?: string };
+      return `🔥 최종보스 ${p.boss_name ?? "수르트"} 처치! 게임 승리.`;
+    }
     default:
       return `${e.kind}: ${JSON.stringify(p)}`;
   }

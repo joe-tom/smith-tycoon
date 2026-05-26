@@ -99,9 +99,19 @@ export interface NegotiateResponse {
   message: string;
 }
 
+export interface Demon {
+  type: string;
+  attribute: string | null;
+  difficulty: number;
+  is_boss?: boolean;
+  boss_id?: string;
+  sin?: string | null;
+}
+
 export interface BattleResponse {
   script: string;
   outcomes: { hero: string; weapon: string; demon: string };
+  demon: Demon;
   next_phase: string;
 }
 
