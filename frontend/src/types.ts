@@ -116,6 +116,7 @@ export interface BattleResponse {
   script: string;
   outcomes: { hero: string; weapon: string; demon: string };
   demon: Demon;
+  weapon: Weapon | null;
   next_phase: string;
 }
 

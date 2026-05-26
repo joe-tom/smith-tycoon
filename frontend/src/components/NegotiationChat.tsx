@@ -84,7 +84,7 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
           <select value={selectedId} onChange={(e) => setSelectedId(Number(e.target.value))} disabled={negotiationStarted}>
             {weapons.map((w) => (
               <option key={w.id} value={w.id}>
-                {w.name} ({w.type}, 희귀도 {w.rarity}, 예리도 {w.sharpness}{w.market_price != null ? `, 시세 ${w.market_price}` : ""})
+                {w.name} ({w.type}{w.attribute ? ` · ${w.attribute}` : ""}, 희귀도 {w.rarity}, 예리도 {w.sharpness}{w.market_price != null ? `, 시세 ${w.market_price}` : ""})
               </option>
             ))}
           </select>

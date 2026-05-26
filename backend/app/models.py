@@ -46,6 +46,7 @@ class BattleResponse(BaseModel):
     script: str
     outcomes: dict
     demon: dict
+    weapon: dict | None
     next_phase: str
 
 

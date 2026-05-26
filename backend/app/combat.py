@@ -316,4 +316,5 @@ async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[
         endgame.apply_ending(pid, ending)
 
     return {"script": script, "outcomes": outcomes, "demon": demon,
+            "weapon": weapon,
             "next_phase": repo.load_player(pid)["current_phase"]}

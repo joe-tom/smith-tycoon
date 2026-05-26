@@ -66,7 +66,7 @@ export function MerchantPanel({ merchant, onDone }: { merchant: MerchantToday; o
         return (
           <div key={m.material_id} className="material-row">
             <span style={{ flex: 1 }}>
-              {m.name} <small>({m.category}, 단가 ~{unit}골드, 재고 {m.qty})</small>
+              {m.name} <small>({m.category}{m.attribute ? ` · ${m.attribute}` : ""}, 단가 ~{unit}골드, 재고 {m.qty})</small>
             </span>
             <button className="btn" onClick={() => change(m.material_id, m.qty, -1)}>−</button>
             <span style={{ width: 24, textAlign: "center" }}>{picked}</span>
