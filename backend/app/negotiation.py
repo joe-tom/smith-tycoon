@@ -58,13 +58,18 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
             "message": f"좋소, {safe_price} 골드면 거래합시다. 약속한 대로요.",
         }
     else:
+        from . import hero_registry as _hr
+        prefs = _hr.preferences_for(hero)
+        weapon_fits = weapon["type"] in prefs.get("types", [])
         fixture_name = "negotiate_accept"
         llm = await complete_json("negotiate_sell", fixture_name,
                                   hero=hero, weapon=weapon,
                                   market_price=base,
                                   prior_rounds=prior_rounds,
                                   player_message=player_message,
-                                  price_offered=safe_price)
+                                  price_offered=safe_price,
+                                  preferences=prefs,
+                                  weapon_fits=weapon_fits)
 
     decision = llm["decision"]
     counter = llm.get("counter_price")

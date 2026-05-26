@@ -112,7 +112,28 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
         </div>
       )}
 
-      <p><small>용사 기분: {hero.mood} / 성격: {hero.personality_tags.join(", ")} / 보유 금화: {hero.gold}</small></p>
+      <p><small>용사 기분: {hero.mood} / 성격: {hero.personality_tags.join(", ")} / 보유 금화: {hero.gold} / 근력 {hero.str}·마력 {hero.mag}</small></p>
+
+      {hero.preferences && (
+        <div style={{
+          marginBottom: 8, padding: 8, background: "#eef6ff",
+          borderRadius: 6, fontSize: "0.9em",
+        }}>
+          <div>
+            <strong>선호 무기:</strong>{" "}
+            {hero.preferences.types.length > 0
+              ? hero.preferences.types.map((t) => (
+                  <span key={t} style={{
+                    display: "inline-block", marginRight: 6, padding: "2px 8px",
+                    background: weapons.find((w) => w.id === selectedId)?.type === t ? "#a5e0a5" : "#fff",
+                    border: "1px solid #99c", borderRadius: 4,
+                  }}>{t}</span>
+                ))
+              : <em>특별한 선호 없음</em>}
+          </div>
+          <div style={{ marginTop: 4 }}><small>{hero.preferences.hint} · {hero.preferences.stat_hint}</small></div>
+        </div>
+      )}
 
       <div className="chat">
         {msgs.map((m, i) => (

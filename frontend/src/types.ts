@@ -20,6 +20,12 @@ export interface Weapon {
   market_price?: number;   // 서버 자동 계산 — /state 응답에서 채움
 }
 
+export interface HeroPreferences {
+  types: string[];
+  hint: string;
+  stat_hint: string;
+}
+
 export interface Hero {
   id: number;
   name: string;
@@ -30,6 +36,7 @@ export interface Hero {
   mood: string;
   personality_tags: string[];
   affinity: number;
+  preferences?: HeroPreferences;
 }
 
 export interface Player {

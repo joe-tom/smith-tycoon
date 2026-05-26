@@ -30,7 +30,7 @@ def get_state():
         todays = hero_registry.heroes_for_today(player["current_day"])
         idx = _hero_index(player["current_phase"])
         if idx is not None and idx < len(todays):
-            hero = todays[idx]
+            hero = {**todays[idx], "preferences": hero_registry.preferences_for(todays[idx])}
 
     merchant_today = None
     if player["current_phase"] == "merchant_negotiate":
