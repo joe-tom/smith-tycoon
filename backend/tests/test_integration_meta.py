@@ -145,3 +145,46 @@ def test_nickname_should_award_logic():
     assert should_award(hero, consecutive_survives=1) is False
     hero2 = {"affinity": 10, "nickname": None}
     assert should_award(hero2, consecutive_survives=5) is False
+
+
+@pytest.mark.asyncio
+async def test_day_100_surt_appears_and_logs_kill_events():
+    """Day 100에서 강력 무기로 수르트 처치 → boss_kill + surt_kill 이벤트 기록."""
+    from app import combat, hero_registry
+    from unittest.mock import patch
+
+    fake = FakeRepo()
+    fake.player["current_day"] = 100
+    fake.player["current_phase"] = "hero1_battle"
+    # 매우 강한 무기 + 5행 상성 우위 (물 → 불 = 1.3)
+    fake.weapons.append({
+        "id": 999, "owner": "sold", "name": "필멸검", "type": "양손검",
+        "rarity": 95, "sharpness": 95, "attribute": "물",
+        "skill": "...", "str_req": 1, "mag_req": 1,
+        "materials_used": [], "enhancement_level": 0,
+        "player_id": 1, "created_day": 1,
+    })
+    fake.heroes.append({
+        "id": 50, "name": "용사", "job": "검사", "str": 99, "mag": 99,
+        "gold": 0, "mood": "여유로움", "personality_tags": ["호탕"],
+        "affinity": 0, "status": "alive", "return_day": None, "history": [],
+        "nickname": None, "held_weapon_id": 999, "visit_count": 1,
+    })
+
+    with patch.object(combat, "repo", fake), \
+         patch.object(hero_registry, "repo", fake):
+        result = await combat.run_battle(fake.player, 50, 999)
+
+    # 수르트 등장은 결정론적 (day 100 + surt alive)
+    assert result["demon"].get("is_boss") is True
+    assert result["demon"].get("boss_id") == "surt"
+
+    # 강력 무기 + 상성 우위로 보통 처치되지만, 랜덤 분기라 확정은 아님
+    if result["outcomes"]["demon"] == "killed":
+        kinds = [e["kind"] for e in fake.day_events]
+        assert "boss_kill" in kinds, f"boss_kill not in {kinds}"
+        assert "surt_kill" in kinds, f"surt_kill not in {kinds}"
+        # day_event payload 검증
+        boss_kill_ev = next(e for e in fake.day_events if e["kind"] == "boss_kill")
+        assert boss_kill_ev["payload"]["boss_id"] == "surt"
+        assert boss_kill_ev["payload"]["boss_name"] == "수르트"
