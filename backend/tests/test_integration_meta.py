@@ -191,3 +191,6 @@ async def test_day_100_surt_appears_and_logs_kill_events():
         boss_kill_ev = next(e for e in fake.day_events if e["kind"] == "boss_kill")
         assert boss_kill_ev["payload"]["boss_id"] == "surt"
         assert boss_kill_ev["payload"]["boss_name"] == "수르트"
+        # 엔딩 적용 확인
+        assert fake.player["ending_kind"] == "surt_killed"
+        assert fake.player["current_phase"] == "game_over"
