@@ -23,6 +23,17 @@ create table if not exists day_events (
 alter table heroes add column if not exists held_weapon_id bigint references weapons(id);
 alter table heroes add column if not exists visit_count int not null default 0;
 
+-- 기존 hero에 visit_count backfill: hero_roster day_event에 등장한 일자 수
+with counts as (
+  select (jsonb_array_elements_text(payload->'hero_ids'))::bigint as hero_id,
+         count(distinct day) as visits
+  from day_events
+  where kind = 'hero_roster'
+  group by hero_id
+)
+update heroes h set visit_count = c.visits
+from counts c where h.id = c.hero_id and h.visit_count = 0;
+
 -- RLS
 alter table players          enable row level security;
 alter table inventory        enable row level security;
