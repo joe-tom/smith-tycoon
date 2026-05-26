@@ -79,6 +79,13 @@ async def step_sell(weapon_id: int, hero_id: int, price_offered: int,
         # 용사의 새 카운터는 이전 최고 카운터보다 낮아질 수 없음 (자기 의향가 후퇴 금지)
         if max_hero_counter is not None and counter < max_hero_counter:
             counter = max_hero_counter
+        # 시세 대비 합리적 최저선 — 선호 맞으면 70%, 안 맞으면 50%
+        from . import hero_registry as _hr
+        _prefs = _hr.preferences_for(hero)
+        _fits = weapon["type"] in _prefs.get("types", [])
+        floor = int(base * (0.7 if _fits else 0.5))
+        if counter < floor:
+            counter = floor
         # 용사는 자기 보유 금화 이상으론 못 산다 — counter를 hero_gold로 캡
         counter = min(counter, hero_gold)
 
