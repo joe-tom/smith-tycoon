@@ -34,6 +34,8 @@ export const api = {
     request<{ ok: true; agreed_price: number; next_phase: string }>("POST", "/negotiate/player_accept", { negotiation_id }),
   playerReject: (negotiation_id: number) =>
     request<{ ok: true; next_phase: string }>("POST", "/negotiate/player_reject", { negotiation_id }),
+  negotiateSkip: () =>
+    request<{ ok: true; next_phase: string }>("POST", "/negotiate/skip"),
 
   battle: () => request<BattleResponse>("POST", "/battle"),
 

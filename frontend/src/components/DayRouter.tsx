@@ -1,4 +1,5 @@
 import type { StateResponse } from "../types";
+import { api } from "../api";
 import { ForgePanel } from "./ForgePanel";
 import { NegotiationChat } from "./NegotiationChat";
 import { BattleResult } from "./BattleResult";
@@ -19,7 +20,13 @@ export function DayRouter({ state, refresh, onReset }: { state: StateResponse; r
   }
   if (NEGOTIATE_PHASES.has(phase)) {
     if (!state.hero || state.weapons.length === 0) {
-      return <p>판매할 무기가 없습니다. (제작을 건너뛰셨다면 이번 협상은 무기 없이 진행됩니다.)</p>;
+      const skip = async () => { await api.negotiateSkip(); refresh(); };
+      return (
+        <div>
+          <p>판매할 무기가 없습니다. 무기 없이 전투로 진행할 수 있습니다.</p>
+          <button className="btn" onClick={skip}>건너뛰기 (전투로)</button>
+        </div>
+      );
     }
     return <NegotiationChat hero={state.hero} weapon={state.weapons[0]} onDone={refresh} />;
   }

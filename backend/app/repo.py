@@ -18,7 +18,7 @@ def reset_game() -> None:
     c = _client()
     # inventory는 composite PK라 id 컬럼이 없음 → player_id로 와이프
     c.table("inventory").delete().gte("player_id", 0).execute()
-    for table in ("battles", "negotiations", "weapons", "heroes"):
+    for table in ("day_events", "merchants_today", "battles", "negotiations", "weapons", "heroes"):
         c.table(table).delete().neq("id", -1).execute()
     c.table("materials").delete().neq("id", -1).execute()
     c.table("players").delete().neq("id", -1).execute()

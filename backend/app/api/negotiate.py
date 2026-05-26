@@ -63,3 +63,15 @@ def post_player_reject(req: FinalizeRequest):
         raise HTTPException(400, detail={"error": "cannot_reject", "message": str(e)})
     player = repo.load_player()
     return {"ok": True, "next_phase": player["current_phase"]}
+
+
+@router.post("/negotiate/skip")
+def post_negotiate_skip():
+    """무기가 없거나 협상을 건너뛰고 전투 phase로 진입. 평판 변화 없음."""
+    player = repo.load_player()
+    try:
+        state_machine.assert_phase_in(player["current_phase"], NEGOTIATE_PHASES)
+    except state_machine.PhaseError:
+        raise HTTPException(400, detail={"error": "wrong_phase", "current_phase": player["current_phase"]})
+    repo.update_player(current_phase=state_machine.next_phase(player["current_phase"]))
+    return {"ok": True, "next_phase": repo.load_player()["current_phase"]}

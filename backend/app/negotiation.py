@@ -177,6 +177,10 @@ async def step_buy(merchant_id: int, price_offered: int, player_message: str,
         update["agreed_price"] = safe_price
     elif decision == "reject":
         update["outcome"] = "rejected"
+        # 상인 reject 시 phase advance + merchant 정리 (평판 변화는 §7.2: 즉시 거절 0)
+        player_now = repo.load_player()
+        repo.update_player(current_phase=state_machine.next_phase(player_now["current_phase"]))
+        repo.update_merchant_today(neg["counterparty_id"], outcome="done")
     repo.update_negotiation(neg_id, **update)
 
     return {

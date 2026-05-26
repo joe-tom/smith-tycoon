@@ -26,13 +26,26 @@ def generate_hero(seed: int | None = None) -> dict[str, Any]:
 
 
 def heroes_for_today(day: int, count: int = 3) -> list[dict[str, Any]]:
-    """오늘 등장할 용사 목록 — 재방문 대상 우선, 부족분 신규 생성·삽입."""
+    """오늘 등장할 용사 목록 — 하루의 로스터는 첫 호출에서 결정·persist 후 동일.
+
+    구현: day_events에 kind='hero_roster' 마커를 두고 hero_ids 리스트를 저장.
+    이후 호출은 마커를 읽어 같은 hero 인스턴스를 반환. 전투 결과로 return_day가
+    갱신돼도 당일 슬롯 인덱스는 고정된다.
+    """
+    events = repo.list_day_events(day)
+    roster = next((e for e in events if e["kind"] == "hero_roster"), None)
+    if roster:
+        ids = roster["payload"]["hero_ids"]
+        return [repo.get_hero(hid) for hid in ids]
+
     ready = repo.list_alive_heroes_ready(day)
     ready.sort(key=lambda h: (h.get("return_day") or 0))
     picked = ready[:count]
     for _ in range(count - len(picked)):
         h = repo.insert_hero(generate_hero())
         picked.append(h)
+    repo.insert_day_event(day=day, phase="forge_open", kind="hero_roster",
+                          payload={"hero_ids": [h["id"] for h in picked]})
     return picked
 
 
