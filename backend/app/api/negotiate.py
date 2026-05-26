@@ -4,12 +4,18 @@ from ..models import NegotiateRequest, NegotiateResponse, FinalizeRequest
 
 router = APIRouter()
 
+NEGOTIATE_PHASES = ["hero1_negotiate", "hero2_negotiate", "hero3_negotiate"]
+
+
+def _hero_index_for_phase(phase: str) -> int:
+    return {"hero1_negotiate": 0, "hero2_negotiate": 1, "hero3_negotiate": 2}[phase]
+
 
 @router.post("/negotiate", response_model=NegotiateResponse)
 async def post_negotiate(req: NegotiateRequest):
     player = repo.load_player()
     try:
-        state_machine.assert_phase(player["current_phase"], "hero_negotiate")
+        state_machine.assert_phase_in(player["current_phase"], NEGOTIATE_PHASES)
     except state_machine.PhaseError:
         raise HTTPException(400, detail={"error": "wrong_phase",
                                           "current_phase": player["current_phase"]})
@@ -18,10 +24,10 @@ async def post_negotiate(req: NegotiateRequest):
     if weapon["owner"] != "player":
         raise HTTPException(400, detail={"error": "weapon_not_owned"})
 
-    heroes = repo.list_alive_heroes()
-    if not heroes:
-        raise HTTPException(400, detail={"error": "no_hero_present"})
-    hero_id = heroes[0]["id"]
+    from .. import hero_registry
+    todays = hero_registry.heroes_for_today(player["current_day"])
+    idx = _hero_index_for_phase(player["current_phase"])
+    hero_id = todays[idx]["id"]
 
     result = await negotiation.step_sell(req.weapon_id, hero_id, req.price_offered,
                                          req.player_message, neg_id=req.negotiation_id)
@@ -40,7 +46,6 @@ def post_finalize(req: FinalizeRequest):
 
 @router.post("/negotiate/player_accept")
 def post_player_accept(req: FinalizeRequest):
-    """플레이어가 용사 카운터를 수락하고 거래를 즉시 확정."""
     try:
         agreed = negotiation.player_accept_counter(req.negotiation_id)
         negotiation.finalize_sale(req.negotiation_id)
@@ -52,7 +57,6 @@ def post_player_accept(req: FinalizeRequest):
 
 @router.post("/negotiate/player_reject")
 def post_player_reject(req: FinalizeRequest):
-    """플레이어가 협상 결렬 — 평판 -1, 전투 phase로."""
     try:
         negotiation.player_reject(req.negotiation_id)
     except ValueError as e:
