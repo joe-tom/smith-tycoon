@@ -70,6 +70,9 @@ class FakeRepo:
                                 "day": day, "phase": phase, "kind": kind, "payload": payload})
     def list_day_events(self, player_id, day):
         return [e for e in self.day_events if e["day"] == day and e.get("player_id") == player_id]
+    def list_defeated_boss_ids(self, player_id):
+        return {e["payload"]["boss_id"] for e in self.day_events
+                if e["kind"] == "boss_kill" and e.get("payload", {}).get("boss_id")}
     def count_consecutive_survives(self, player_id, hero_id):
         c = 0
         for b in reversed(self.battles):

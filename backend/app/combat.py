@@ -225,7 +225,8 @@ async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[
     hero = repo.get_hero(hero_id)
     weapon = repo.get_weapon(weapon_id) if weapon_id else None
     player = repo.load_player(pid)
-    demon = roll_demon(day=player["current_day"])
+    defeated_boss_ids = repo.list_defeated_boss_ids(pid)
+    demon = roll_demon(day=player["current_day"], defeated_boss_ids=defeated_boss_ids)
 
     # 결과 코드는 서버가 결정. LLM은 서술만.
     outcomes = decide_outcomes(hero, weapon, demon)
@@ -237,6 +238,8 @@ async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[
     # LLM 응답에 outcomes가 같이 와도 무시 — 서버 결정 사용
     script = llm.get("script", "전투가 끝났다.")
     delta = apply_outcomes(outcomes)
+    if outcomes["demon"] == "killed" and demon.get("is_boss"):
+        delta["reputation"] += 10
 
     repo.update_player(pid, reputation=player["reputation"] + delta["reputation"],
                        current_phase=state_machine.next_phase(player["current_phase"]))
@@ -283,5 +286,20 @@ async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[
                  "hero_id": hero_id, "demon": demon, "rep_delta": delta["reputation"]},
     )
 
-    return {"script": script, "outcomes": outcomes,
+    if outcomes["demon"] == "killed" and demon.get("is_boss"):
+        repo.insert_day_event(
+            pid, day=player["current_day"], phase=player["current_phase"],
+            kind="boss_kill",
+            payload={"boss_id": demon["boss_id"], "boss_name": demon["type"],
+                     "sin": demon.get("sin"), "battle_id": battle_row["id"]},
+        )
+        if demon["boss_id"] == "surt":
+            repo.insert_day_event(
+                pid, day=player["current_day"], phase=player["current_phase"],
+                kind="surt_kill",
+                payload={"boss_id": "surt", "boss_name": demon["type"],
+                         "battle_id": battle_row["id"], "final": True},
+            )
+
+    return {"script": script, "outcomes": outcomes, "demon": demon,
             "next_phase": repo.load_player(pid)["current_phase"]}

@@ -83,6 +83,10 @@ class FakeRepo:
     def list_day_events(self, player_id, day):
         return [e for e in self.day_events if e["day"] == day and e.get("player_id") == player_id]
 
+    def list_defeated_boss_ids(self, player_id):
+        return {e["payload"]["boss_id"] for e in self.day_events
+                if e["kind"] == "boss_kill" and e.get("payload", {}).get("boss_id")}
+
     def insert_battle(self, player_id, b):
         b = {**b, "id": len(self.battles) + 1, "player_id": player_id}
         self.battles.append(b); return b
