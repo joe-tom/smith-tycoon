@@ -15,7 +15,7 @@ export function NegotiationChat({ hero, weapon, onDone }: { hero: Hero; weapon: 
   const send = async () => {
     setBusy(true); setErr(null);
     try {
-      const res = await api.negotiate(weapon.id, price, text);
+      const res = await api.negotiate(weapon.id, price, text, last?.negotiation_id ?? null);
       setMsgs((m) => [
         ...m,
         { role: "player", message: text, price },

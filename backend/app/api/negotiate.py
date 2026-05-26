@@ -24,7 +24,7 @@ async def post_negotiate(req: NegotiateRequest):
     hero_id = heroes[0]["id"]
 
     result = await negotiation.step_sell(req.weapon_id, hero_id, req.price_offered,
-                                         req.player_message, neg_id=None)
+                                         req.player_message, neg_id=req.negotiation_id)
     return result
 
 

@@ -27,6 +27,7 @@ class NegotiateRequest(BaseModel):
     weapon_id: int
     price_offered: int
     player_message: str
+    negotiation_id: int | None = None
     idempotency_key: str | None = None
 
 

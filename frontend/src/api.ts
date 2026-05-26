@@ -20,8 +20,8 @@ export const api = {
   resetGame: () => request<{ ok: true }>("POST", "/game/reset"),
   forge: (weapon_type: string, materials: { material_id: number; qty: number }[]) =>
     request<Weapon>("POST", "/forge", { weapon_type, materials }),
-  negotiate: (weapon_id: number, price_offered: number, player_message: string) =>
-    request<NegotiateResponse>("POST", "/negotiate", { weapon_id, price_offered, player_message }),
+  negotiate: (weapon_id: number, price_offered: number, player_message: string, negotiation_id: number | null = null) =>
+    request<NegotiateResponse>("POST", "/negotiate", { weapon_id, price_offered, player_message, negotiation_id }),
   finalize: (negotiation_id: number) =>
     request<{ ok: true; next_phase: string }>("POST", "/negotiate/finalize", { negotiation_id }),
   battle: () => request<BattleResponse>("POST", "/battle"),
