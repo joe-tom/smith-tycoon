@@ -18,7 +18,7 @@ def reset_game() -> None:
     c = _client()
     # inventory는 composite PK라 id 컬럼이 없음 → player_id로 와이프
     c.table("inventory").delete().gte("player_id", 0).execute()
-    for table in ("battles", "negotiations", "weapons", "heroes"):
+    for table in ("day_events", "merchants_today", "battles", "negotiations", "weapons", "heroes"):
         c.table(table).delete().neq("id", -1).execute()
     c.table("materials").delete().neq("id", -1).execute()
     c.table("players").delete().neq("id", -1).execute()
@@ -118,3 +118,57 @@ def list_alive_heroes() -> list[dict[str, Any]]:
 
 def list_sold_weapons() -> list[dict[str, Any]]:
     return _client().table("weapons").select("*").eq("owner", "sold").order("id").execute().data
+
+
+# --- Plan 2: merchants_today ---
+
+def get_merchant_today(day: int) -> dict[str, Any] | None:
+    c = _client()
+    rows = c.table("merchants_today").select("*") \
+        .eq("player_id", PLAYER_ID).eq("day", day).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def insert_merchant_today(m: dict[str, Any]) -> dict[str, Any]:
+    return _client().table("merchants_today").insert({**m, "player_id": PLAYER_ID}).execute().data[0]
+
+
+def update_merchant_today(merchant_id: int, **fields: Any) -> None:
+    _client().table("merchants_today").update(fields).eq("id", merchant_id).execute()
+
+
+def add_inventory(material_id: int, qty: int) -> None:
+    """인벤토리에 재료 추가. 없으면 insert, 있으면 qty 증가."""
+    c = _client()
+    rows = c.table("inventory").select("qty") \
+        .eq("player_id", PLAYER_ID).eq("material_id", material_id).limit(1).execute().data
+    if rows:
+        c.table("inventory").update({"qty": rows[0]["qty"] + qty}) \
+            .eq("player_id", PLAYER_ID).eq("material_id", material_id).execute()
+    else:
+        c.table("inventory").insert(
+            {"player_id": PLAYER_ID, "material_id": material_id, "qty": qty}
+        ).execute()
+
+
+# --- Plan 2: day_events ---
+
+def insert_day_event(day: int, phase: str, kind: str, payload: dict[str, Any]) -> None:
+    _client().table("day_events").insert({
+        "player_id": PLAYER_ID, "day": day, "phase": phase,
+        "kind": kind, "payload": payload,
+    }).execute()
+
+
+def list_day_events(day: int) -> list[dict[str, Any]]:
+    return _client().table("day_events").select("*") \
+        .eq("player_id", PLAYER_ID).eq("day", day).order("created_at").execute().data
+
+
+# --- Plan 2: hero 조회 확장 ---
+
+def list_alive_heroes_ready(day: int) -> list[dict[str, Any]]:
+    """alive 상태이며 (return_day is null or return_day <= day) 인 용사들."""
+    c = _client()
+    return c.table("heroes").select("*").eq("status", "alive") \
+        .or_(f"return_day.is.null,return_day.lte.{day}").execute().data

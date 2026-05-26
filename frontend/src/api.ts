@@ -1,4 +1,6 @@
-import type { StateResponse, Weapon, NegotiateResponse, BattleResponse } from "./types";
+import type {
+  StateResponse, Weapon, NegotiateResponse, BattleResponse, DaySummaryResponse,
+} from "./types";
 
 const BASE = "/api";
 
@@ -18,8 +20,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   getState: () => request<StateResponse>("GET", "/state"),
   resetGame: () => request<{ ok: true }>("POST", "/game/reset"),
+
   forge: (weapon_type: string, materials: { material_id: number; qty: number }[]) =>
     request<Weapon>("POST", "/forge", { weapon_type, materials }),
+  forgeSkip: () =>
+    request<{ ok: true; next_phase: string }>("POST", "/forge/skip"),
+
   negotiate: (weapon_id: number, price_offered: number, player_message: string, negotiation_id: number | null = null) =>
     request<NegotiateResponse>("POST", "/negotiate", { weapon_id, price_offered, player_message, negotiation_id }),
   finalize: (negotiation_id: number) =>
@@ -28,5 +34,22 @@ export const api = {
     request<{ ok: true; agreed_price: number; next_phase: string }>("POST", "/negotiate/player_accept", { negotiation_id }),
   playerReject: (negotiation_id: number) =>
     request<{ ok: true; next_phase: string }>("POST", "/negotiate/player_reject", { negotiation_id }),
+  negotiateSkip: () =>
+    request<{ ok: true; next_phase: string }>("POST", "/negotiate/skip"),
+
   battle: () => request<BattleResponse>("POST", "/battle"),
+
+  merchantNegotiate: (merchant_id: number, price_offered: number, player_message: string, negotiation_id: number | null = null) =>
+    request<NegotiateResponse>("POST", "/merchant/negotiate", { merchant_id, price_offered, player_message, negotiation_id }),
+  merchantFinalize: (negotiation_id: number) =>
+    request<{ ok: true; next_phase: string }>("POST", "/merchant/negotiate/finalize", { negotiation_id }),
+  merchantPlayerAccept: (negotiation_id: number) =>
+    request<{ ok: true; agreed_price: number; next_phase: string }>("POST", "/merchant/player_accept", { negotiation_id }),
+  merchantPlayerReject: (negotiation_id: number) =>
+    request<{ ok: true; next_phase: string }>("POST", "/merchant/player_reject", { negotiation_id }),
+  merchantSkip: () =>
+    request<{ ok: true; next_phase: string }>("POST", "/merchant/skip"),
+
+  daySummary: () => request<DaySummaryResponse>("GET", "/day/summary"),
+  nextDay: () => request<{ ok: true; current_day: number; current_phase: string }>("POST", "/day/next"),
 };

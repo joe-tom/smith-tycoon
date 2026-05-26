@@ -20,3 +20,14 @@ def test_market_price_uses_materials_and_rarity():
     ]}
     price = market_price(weapon)
     assert price > 0
+
+
+def test_clamp_buy_price_lower():
+    from app.negotiation import clamp_price
+    assert clamp_price(10, base=1000) == 100
+
+
+def test_market_price_buy_bundle_equivalence():
+    from app.merchant import bundle_market_price
+    bundle = {"materials": [{"base_price": 100, "qty": 3}], "weapon": None}
+    assert bundle_market_price(bundle) == 300
