@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import random
 from pathlib import Path
 from typing import Any
 from supabase import create_client, Client
@@ -11,7 +12,16 @@ def _client() -> Client:
     return create_client(s.supabase_url, s.supabase_service_key)
 
 
-_STARTING_INVENTORY = [(1, 5), (2, 5), (4, 5), (5, 5), (8, 3), (15, 3), (16, 3)]
+def _roll_starting_inventory() -> list[tuple[int, int]]:
+    """매번 다른 시작 인벤토리: 일반 4종 × 3개 + 이상한 2종 × 2개."""
+    c = _client()
+    rows = c.table("materials").select("id, category") \
+        .in_("category", ["일반", "이상한"]).execute().data
+    common  = [m["id"] for m in rows if m["category"] == "일반"]
+    weird   = [m["id"] for m in rows if m["category"] == "이상한"]
+    picked = random.sample(common, k=min(4, len(common)))
+    picked_w = random.sample(weird, k=min(2, len(weird)))
+    return [(mid, 3) for mid in picked] + [(mid, 2) for mid in picked_w]
 
 
 def get_or_create_player_by_nickname(nickname: str) -> dict[str, Any]:
@@ -36,7 +46,7 @@ def get_or_create_player_by_nickname(nickname: str) -> dict[str, Any]:
     player_id = new_player["id"]
     starting = [
         {"player_id": player_id, "material_id": mid, "qty": qty}
-        for mid, qty in _STARTING_INVENTORY
+        for mid, qty in _roll_starting_inventory()
     ]
     c.table("inventory").insert(starting).execute()
     return new_player
@@ -60,10 +70,10 @@ def reset_game(player_id: int) -> None:
         "weapons_destroyed_total": 0,
         "ending_kind": None,
     }).eq("id", player_id).execute()
-    # 초기 인벤토리 재시드
+    # 초기 인벤토리 재시드 (매번 랜덤)
     starting = [
         {"player_id": player_id, "material_id": mid, "qty": qty}
-        for mid, qty in _STARTING_INVENTORY
+        for mid, qty in _roll_starting_inventory()
     ]
     c.table("inventory").insert(starting).execute()
 
