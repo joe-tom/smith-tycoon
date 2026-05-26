@@ -45,7 +45,7 @@ def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
     return s
 
 
-def build(day: int) -> dict[str, Any]:
-    events = repo.list_day_events(day)
+def build(player: dict, day: int) -> dict[str, Any]:
+    events = repo.list_day_events(player["id"], day)
     summary = summarize_events(events)
     return {"day": day, "events": events, "summary": summary}

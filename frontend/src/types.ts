@@ -49,6 +49,7 @@ export interface Player {
   id: number;
   gold: number;
   reputation: number;
+  effort: number;
   current_day: number;
   current_phase: string;
 }

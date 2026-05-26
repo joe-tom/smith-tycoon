@@ -1,13 +1,20 @@
 import type {
   StateResponse, Weapon, NegotiateResponse, BattleResponse, DaySummaryResponse,
 } from "./types";
+import { getNickname } from "./auth";
 
 const BASE = "/api";
+
+function buildHeaders(): HeadersInit {
+  const nickname = getNickname();
+  if (!nickname) throw new Error("no_nickname");
+  return { "Content-Type": "application/json", "X-Player-Nickname": nickname };
+}
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const r = await fetch(`${BASE}${path}`, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: buildHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!r.ok) {

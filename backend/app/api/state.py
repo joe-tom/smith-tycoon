@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from .. import repo, hero_registry, merchant as merchant_module, negotiation
+from ..auth import current_player
 
 router = APIRouter()
 
@@ -15,19 +16,16 @@ def _hero_index(phase: str) -> int | None:
 
 
 @router.get("/state")
-def get_state():
-    player = repo.load_player()
-    if player is None:
-        return {"player": None, "inventory": [], "weapons": [],
-                "hero": None, "merchant": None}
-
-    inventory = repo.load_inventory()
+def get_state(player: dict = Depends(current_player)):
+    # current_player always returns a valid player dict (creating one if needed).
+    pid = player["id"]
+    inventory = repo.load_inventory(pid)
     weapons = [{**w, "market_price": negotiation.market_price(w)}
-               for w in repo.load_player_weapons()]
+               for w in repo.load_player_weapons(pid)]
 
     hero = None
     if player["current_phase"] in NEGOTIATE_PHASES + BATTLE_PHASES:
-        todays = hero_registry.heroes_for_today(player["current_day"])
+        todays = hero_registry.heroes_for_today(pid, player["current_day"])
         idx = _hero_index(player["current_phase"])
         if idx is not None and idx < len(todays):
             h = todays[idx]
@@ -45,11 +43,11 @@ def get_state():
 
     merchant_today = None
     if player["current_phase"] == "merchant_negotiate":
-        m = repo.get_merchant_today(player["current_day"])
+        m = repo.get_merchant_today(pid, player["current_day"])
         if m is None:
-            bundle = merchant_module.generate_today(player["current_day"])
-            m = repo.insert_merchant_today({"day": player["current_day"], **bundle,
-                                             "outcome": "pending"})
+            bundle = merchant_module.generate_today(pid, player["current_day"])
+            m = repo.insert_merchant_today(pid, {"day": player["current_day"], **bundle,
+                                                  "outcome": "pending"})
         merchant_today = m
 
     return {

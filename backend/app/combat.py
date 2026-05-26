@@ -88,10 +88,11 @@ def decide_outcomes(hero: dict[str, Any], weapon: dict[str, Any] | None,
     return {"hero": hero_r, "weapon": weapon_r, "demon": demon_r}
 
 
-async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
+async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[str, Any]:
+    pid = player["id"]
     hero = repo.get_hero(hero_id)
     weapon = repo.get_weapon(weapon_id) if weapon_id else None
-    player = repo.load_player()
+    player = repo.load_player(pid)
     demon = roll_demon(day=player["current_day"])
 
     # 결과 코드는 서버가 결정. LLM은 서술만.
@@ -105,7 +106,7 @@ async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
     script = llm.get("script", "전투가 끝났다.")
     delta = apply_outcomes(outcomes)
 
-    repo.update_player(reputation=player["reputation"] + delta["reputation"],
+    repo.update_player(pid, reputation=player["reputation"] + delta["reputation"],
                        current_phase=state_machine.next_phase(player["current_phase"]))
 
     # 전투 결과별로 status·return_day 갱신.
@@ -121,7 +122,7 @@ async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
 
     # 별명 부여 트리거
     if outcomes.get("hero") == "survived" and outcomes.get("demon") == "killed":
-        consecutive = repo.count_consecutive_survives(hero_id) + 1  # 이번 전투 포함
+        consecutive = repo.count_consecutive_survives(pid, hero_id) + 1  # 이번 전투 포함
         refreshed_hero = repo.get_hero(hero_id)
         if nickname_mod.should_award(refreshed_hero, consecutive):
             recent_demons = [demon["type"]]
@@ -129,11 +130,11 @@ async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
             if picked:
                 repo.update_hero(hero_id, nickname=picked)
                 repo.insert_day_event(
-                    day=player["current_day"], phase=player["current_phase"],
+                    pid, day=player["current_day"], phase=player["current_phase"],
                     kind="nickname", payload={"hero_id": hero_id, "nickname": picked},
                 )
 
-    battle_row = repo.insert_battle({
+    battle_row = repo.insert_battle(pid, {
         "day": player["current_day"],
         "hero_id": hero_id,
         "weapon_id": weapon_id,
@@ -143,7 +144,7 @@ async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
     })
 
     repo.insert_day_event(
-        day=player["current_day"],
+        pid, day=player["current_day"],
         phase=player["current_phase"],
         kind="battle",
         payload={"battle_id": battle_row["id"], "outcomes": outcomes,
@@ -151,4 +152,4 @@ async def run_battle(hero_id: int, weapon_id: int | None) -> dict[str, Any]:
     )
 
     return {"script": script, "outcomes": outcomes,
-            "next_phase": repo.load_player()["current_phase"]}
+            "next_phase": repo.load_player(pid)["current_phase"]}
