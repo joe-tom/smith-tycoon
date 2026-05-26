@@ -40,7 +40,7 @@ export interface Player {
 }
 
 export interface StateResponse {
-  player: Player;
+  player: Player | null;
   inventory: Material[];
   weapons: Weapon[];
   hero: Hero | null;

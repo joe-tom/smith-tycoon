@@ -16,7 +16,9 @@ def _client() -> Client:
 def reset_game() -> None:
     """모든 게임 데이터 삭제 + 시드 + player_id=1 생성."""
     c = _client()
-    for table in ("battles", "negotiations", "inventory", "weapons", "heroes"):
+    # inventory는 composite PK라 id 컬럼이 없음 → player_id로 와이프
+    c.table("inventory").delete().gte("player_id", 0).execute()
+    for table in ("battles", "negotiations", "weapons", "heroes"):
         c.table(table).delete().neq("id", -1).execute()
     c.table("materials").delete().neq("id", -1).execute()
     c.table("players").delete().neq("id", -1).execute()
@@ -37,9 +39,10 @@ def reset_game() -> None:
     c.table("inventory").insert(starting).execute()
 
 
-def load_player() -> dict[str, Any]:
+def load_player() -> dict[str, Any] | None:
     c = _client()
-    return c.table("players").select("*").eq("id", PLAYER_ID).single().execute().data
+    rows = c.table("players").select("*").eq("id", PLAYER_ID).limit(1).execute().data
+    return rows[0] if rows else None
 
 
 def update_player(**fields: Any) -> None:

@@ -4,6 +4,7 @@ import { NegotiationChat } from "./NegotiationChat";
 import { BattleResult } from "./BattleResult";
 
 export function DayRouter({ state, refresh }: { state: StateResponse; refresh: () => void }) {
+  if (!state.player) return null;
   const phase = state.player.current_phase;
   if (phase === "forge_open") {
     return <ForgePanel inventory={state.inventory} onDone={refresh} />;

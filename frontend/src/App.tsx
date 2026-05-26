@@ -12,7 +12,7 @@ export default function App() {
 
   useEffect(() => { refresh().catch(() => setState(null)); }, []);
 
-  if (!state) {
+  if (!state || !state.player) {
     return (
       <div style={{ padding: 24 }}>
         <button className="btn" onClick={reset}>새 게임 시작</button>

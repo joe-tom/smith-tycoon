@@ -1,6 +1,7 @@
 import type { StateResponse } from "../types";
 
 export function SidePanel({ state, onReset }: { state: StateResponse; onReset: () => void }) {
+  if (!state.player) return null;
   return (
     <div className="side">
       <h3>플레이어</h3>
