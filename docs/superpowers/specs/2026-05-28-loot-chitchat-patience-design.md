@@ -229,6 +229,43 @@ ALTER TABLE negotiations
 9. `LootNegotiation`, `ChitchatPanel`, 인내심 게이지
 10. 회귀 + 브라우저 검증
 
+## 후속: 인내심 기반 양보폭 U곡선 (2026-05-28 추가)
+
+### 문제
+현재 모든 협상의 1라운드 양보폭이 직전가의 **5% 고정**이라 양측이 합의에 도달하기까지 라운드가 많이 들고, 인내심 상태가 가격에 영향을 주지 않아 게이지가 장식에 가깝다.
+
+### 규칙
+`patience.concession_multiplier(patience: int) -> float`를 도입한다.
+
+```
+distance = abs(patience - 50)         # 0..50
+multiplier = 1.0 + min(distance, 50) / 25   # 1.0..3.0
+```
+
+- patience=50 → 1.0× (현재와 동일)
+- patience=75 or 25 → 2.0× (10%)
+- patience=100 or 1 → 3.0× (15%)
+
+**해석**: 인내심이 가득한 NPC는 기분이 좋아 후하게 양보하고, 거의 탈진한 NPC는 빨리 끝내려고 후하게 양보한다. 중간 구간(40~60)이 가장 빡빡하다.
+
+### 적용 지점 (4곳)
+1. `negotiation.py:155` `step_sell` — `max_raise = int(previous * 0.05 * mult)`
+2. `negotiation.py:408` `step_buy` — `max_drop = int(previous * 0.05 * mult)`
+3. `negotiation.py:814` `step_buy_loot` — `previous - int(previous * 0.05 * mult)`
+4. `step_enhance` — **현재 5% cap 없음**. 동일하게 `0.05 * mult` cap을 신규로 추가해 4가지 협상을 통일한다.
+
+`mult`는 라운드 진입 시점의 `patience_current`로 계산. `0.05 * mult * previous` 결과는 `int()`로 내림.
+
+### 범위 밖 (이번 후속에서 OUT)
+- 시작 인내심 값, 라운드 감소량(5/10), exhausted 종료 로직 — 변경 없음
+- floor (선호 가중 60/80%, 상인 70/80%) — 변경 없음, 양보폭만 늘어남
+- LLM 메시지 톤 — 그대로 (숫자만 변경)
+
+### 테스트
+- `tests/test_patience.py`: `concession_multiplier` 단위 (5케이스: 0/25/50/75/100)
+- `tests/test_negotiation.py`: 각 step_*에 patience=50 / patience=100 / patience=10 케이스
+- 회귀: 기존 patience 없는 (None) 케이스 → 50 폴백으로 1.0× 유지
+
 ## 범위 밖 (명시적 OUT)
 
 - 무기 수리/반환 흐름 (Q8: 부상 시 destroyed로 단순화)
