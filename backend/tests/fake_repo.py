@@ -148,3 +148,14 @@ class FakeRepo:
             "id": self._event_seq, "player_id": player_id, "day": day,
             "phase": phase, "kind": kind, "payload": payload,
         })
+
+    # --- 부수적인 stub들 (combat 등 통합 테스트용) ---
+    def list_defeated_boss_ids(self, player_id: int) -> set[str]:
+        return {e["payload"]["boss_id"] for e in self.day_events
+                if e["kind"] == "boss_kill" and e.get("payload", {}).get("boss_id")}
+
+    def count_consecutive_survives(self, player_id: int, hero_id: int) -> int:
+        return 0
+
+    def insert_battle(self, player_id: int, b: dict[str, Any]) -> dict[str, Any]:
+        return {**b, "id": 1, "player_id": player_id}

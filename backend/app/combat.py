@@ -260,13 +260,24 @@ async def dispatch_async_battle(player: dict, hero_id: int, weapon_id: int | Non
     resolve_day = scheduler.resolve_day_for(label, player["current_day"], seed=seed + 7)
     kind = po._kind_for(outcomes["hero"])
     weapon_snapshot = dict(weapon) if weapon else {}
+
+    # 전리품 — 생존(survived/injured) + demon killed 케이스만
+    from . import loot_table as _lt
+    loot: list[dict[str, Any]] = []
+    if outcomes["hero"] != "died" and outcomes["demon"] == "killed":
+        loot = _lt.roll_loot(demon, seed=seed + 17)
+        if loot:
+            repo.append_hero_loot(hero_id, loot)
+
     saved = repo.insert_pending_outcome({
         "player_id": pid,
         "hero_id": hero_id,
         "depart_day": player["current_day"],
         "resolve_day": resolve_day,
         "kind": kind,
-        "outcome_json": {**outcomes, "demon": demon, "monsters_killed": 1 if outcomes["demon"] == "killed" else 0},
+        "outcome_json": {**outcomes, "demon": demon,
+                          "monsters_killed": 1 if outcomes["demon"] == "killed" else 0,
+                          "loot": loot},
         "weapon_snapshot": weapon_snapshot,
     })
 
