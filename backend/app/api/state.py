@@ -17,13 +17,17 @@ async def _hydrate_visitor(slot: dict, player: dict, pid: int, day: int) -> dict
             w = repo.get_weapon(h["held_weapon_id"])
             if w:
                 held_weapon = {**w, "market_price": negotiation.market_price(w)}
+        loot_pending = []
+        for it in (h.get("loot_pending") or []):
+            mat = repo.get_material(int(it["material_id"]))
+            loot_pending.append({**it, "name": mat["name"] if mat else f"재료 #{it['material_id']}"})
         return {
             **h,
             "preferences": hero_registry.preferences_for(h),
             "mode": mode,
             "held_weapon": held_weapon,
             "lore": h.get("lore") or [],
-            "loot_pending": h.get("loot_pending") or [],
+            "loot_pending": loot_pending,
         }
 
     if kind == "new_hero":

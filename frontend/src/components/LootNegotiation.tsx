@@ -59,7 +59,7 @@ export function LootNegotiation({ hero, onDone }: { hero: Hero; onDone: () => vo
       <p>호감도 {hero.affinity ?? 0}</p>
       <ul>
         {loot.map((it, i) => (
-          <li key={i}>재료 #{it.material_id} × {it.qty}</li>
+          <li key={i}>{it.name ?? `재료 #${it.material_id}`} × {it.qty}</li>
         ))}
       </ul>
       {last && (
