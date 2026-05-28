@@ -733,3 +733,130 @@ def player_reject_enhance(player: dict, neg_id: int) -> None:
         reputation=player_now["reputation"] - 1,
     )
 
+
+# --- 011: 전리품 매수 ---
+
+async def step_buy_loot(player: dict, hero_id: int, price_offered: int,
+                         player_message: str, neg_id: int | None) -> dict[str, Any]:
+    """전리품 매수 협상. 호감도 가중 시작가 + 인내심."""
+    from . import patience as _pat
+    pid = player["id"]
+    hero = repo.get_hero(hero_id)
+    if not hero:
+        raise ValueError("hero not found")
+    loot = hero.get("loot_pending") or []
+
+    if neg_id is None:
+        if not loot:
+            raise ValueError("no loot to sell")
+        total = 0
+        for it in loot:
+            m = repo.get_material(int(it["material_id"]))
+            total += int((m or {}).get("base_price") or 0) * int(it["qty"])
+        affinity = int(hero.get("affinity", 0))
+        multiplier = max(0.5, 1.2 - affinity / 200.0)
+        asking = max(1, int(total * multiplier))
+        player_data = repo.load_player(pid)
+        p_start = _pat.hero_start(hero)
+        neg = repo.insert_negotiation(pid, {
+            "day": player_data["current_day"], "phase": player_data["current_phase"],
+            "kind": "buy_loot", "counterparty_id": hero_id, "weapon_id": None,
+            "materials": {"items": loot, "asking": asking},
+            "rounds": [], "outcome": "open",
+            "patience_start": p_start, "patience_current": p_start,
+        })
+        neg_id = neg["id"]
+        prior_rounds: list[dict[str, Any]] = []
+        base = asking
+    else:
+        neg = repo.get_negotiation(neg_id)
+        prior_rounds = neg["rounds"]
+        base = int((neg.get("materials") or {}).get("asking") or 1)
+
+    player_now = repo.load_player(pid)
+    safe_price = max(1, min(int(price_offered), int(player_now.get("gold", 0))))
+
+    hero_prior = [int(r["price"]) for r in prior_rounds
+                  if r["role"] == "hero" and r.get("price") is not None]
+    min_counter = min(hero_prior) if hero_prior else None
+
+    p_current = int(neg.get("patience_current") or _pat.hero_start(hero))
+    p_start = int(neg.get("patience_start") or p_current)
+    if prior_rounds:
+        last_player = next((r for r in reversed(prior_rounds) if r["role"] == "player"), None)
+        conceded = bool(last_player and safe_price > int(last_player.get("price") or 0))
+        p_current = _pat.next_after_round(p_current, conceded=conceded)
+        repo.update_negotiation(neg_id, patience_current=p_current)
+
+    if _pat.is_exhausted(p_current):
+        msg = "더는 못 참겠소. 전리품은 다른 데 팔겠소."
+        repo.update_negotiation(neg_id, outcome="rejected", rounds=prior_rounds + [
+            {"role": "player", "message": player_message, "price": safe_price},
+            {"role": "hero", "message": msg, "price": None},
+        ])
+        return {"negotiation_id": neg_id, "decision": "reject", "counter_price": None,
+                "message": msg, "patience_current": p_current, "patience_start": p_start}
+
+    threshold = min_counter if min_counter is not None else base
+    if safe_price >= threshold:
+        repo.update_negotiation(neg_id, outcome="accepted", agreed_price=safe_price,
+                                 rounds=prior_rounds + [
+                                     {"role": "player", "message": player_message, "price": safe_price},
+                                     {"role": "hero", "message": f"좋소, {safe_price}골드에 드리지요.", "price": None},
+                                 ])
+        return {"negotiation_id": neg_id, "decision": "accept", "counter_price": None,
+                "message": f"좋소, {safe_price}골드에 드리지요.",
+                "patience_current": p_current, "patience_start": p_start}
+
+    previous = min_counter if min_counter is not None else base
+    counter = max(int(base * 0.7), previous - int(previous * 0.05))
+    if counter <= safe_price:
+        repo.update_negotiation(neg_id, outcome="accepted", agreed_price=safe_price,
+                                 rounds=prior_rounds + [
+                                     {"role": "player", "message": player_message, "price": safe_price},
+                                     {"role": "hero", "message": f"좋소, {safe_price}골드.", "price": None},
+                                 ])
+        return {"negotiation_id": neg_id, "decision": "accept", "counter_price": None,
+                "message": f"좋소, {safe_price}골드.",
+                "patience_current": p_current, "patience_start": p_start}
+
+    msg = f"그건 너무 싸오. {counter}골드는 받아야 하오."
+    repo.update_negotiation(neg_id, rounds=prior_rounds + [
+        {"role": "player", "message": player_message, "price": safe_price},
+        {"role": "hero", "message": msg, "price": counter},
+    ])
+    return {"negotiation_id": neg_id, "decision": "counter", "counter_price": counter,
+            "message": msg, "patience_current": p_current, "patience_start": p_start}
+
+
+def finalize_buy_loot(player: dict, neg_id: int) -> bool:
+    """매수 finalize. 멱등."""
+    from . import affinity as affinity_mod
+    pid = player["id"]
+    neg = repo.get_negotiation(neg_id)
+    if neg.get("finalized"):
+        return False
+    if neg["outcome"] != "accepted":
+        raise ValueError("negotiation not accepted")
+    repo.update_negotiation(neg_id, finalized=True)
+    player_now = repo.load_player(pid)
+    price = int(neg["agreed_price"])
+    items = (neg.get("materials") or {}).get("items") or []
+    if price > int(player_now.get("gold", 0)):
+        raise ValueError("insufficient gold")
+    repo.update_player(pid, gold=player_now["gold"] - price)
+    for it in items:
+        repo.add_inventory(pid, int(it["material_id"]), int(it["qty"]))
+    hero_id = int(neg["counterparty_id"])
+    hero = repo.get_hero(hero_id)
+    new_aff = affinity_mod.clamp_affinity(int(hero.get("affinity", 0)) + 5)
+    repo.update_hero(hero_id, affinity=new_aff)
+    repo.clear_hero_loot(hero_id)
+    repo.insert_day_event(
+        pid, day=player_now["current_day"], phase=player_now["current_phase"],
+        kind="loot_sale",
+        payload={"negotiation_id": neg_id, "hero_id": hero_id, "price": price,
+                 "items": items, "affinity_delta": 5},
+    )
+    return True
+
