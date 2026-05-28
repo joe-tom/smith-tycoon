@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from . import hero_registry, repo, scheduler
+from .missions import scheduler as mission_scheduler
 
 
 def prepare_day(player: dict[str, Any]) -> dict[str, Any]:
@@ -12,6 +13,15 @@ def prepare_day(player: dict[str, Any]) -> dict[str, Any]:
     """
     day = player["current_day"]
     player_id = player["id"]
+
+    # 미션 스케줄러: plan + evaluate + endgame.
+    # ending 발동 시 schedule 만들지 않고 종료.
+    mission_scheduler.advance(player)
+    if player.get("ending_kind"):
+        repo.update_player(player_id, day_schedule=[], current_visitor_index=0)
+        player["day_schedule"] = []
+        player["current_visitor_index"] = 0
+        return {"schedule": [], "death_mails": []}
 
     pending = repo.list_pending_to_resolve(player_id, day)
     death_mails = [p for p in pending if p["kind"] == "death_mail"]
@@ -42,6 +52,10 @@ def prepare_day(player: dict[str, Any]) -> dict[str, Any]:
     for r in revisits:
         if r["id"] not in taken_outcome_ids:
             repo.update_pending_resolve_day(r["id"], day + 1)
+
+    # 미션 슬롯을 맨 앞에 prepend (그 날의 첫 사건).
+    mission_slots = mission_scheduler.today_slots(player_id, day)
+    schedule = mission_slots + schedule
 
     repo.update_player(
         player_id,

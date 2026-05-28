@@ -13,7 +13,10 @@ def test_prepare_day_builds_schedule_with_new_heroes(fake_repo):
     fake_repo.players[1] = player
     heroes = [{"id": 100, "name": "A"}, {"id": 101, "name": "B"}, {"id": 102, "name": "C"}]
     with patch.object(day_open, "repo", fake_repo), \
+         patch.object(day_open, "mission_scheduler") as mock_ms, \
          patch.object(day_open, "hero_registry") as mock_hr:
+        mock_ms.advance.return_value = None
+        mock_ms.today_slots.return_value = []
         mock_hr.heroes_for_today.side_effect = _heroes_for_today_stub(heroes)
         result = day_open.prepare_day(player)
     assert len(result["schedule"]) == 4
@@ -33,7 +36,10 @@ def test_prepare_day_extracts_death_mails(fake_repo):
     fake_repo.players[1] = player
     heroes = [{"id": 100, "name": "A"}, {"id": 101, "name": "B"}, {"id": 102, "name": "C"}]
     with patch.object(day_open, "repo", fake_repo), \
+         patch.object(day_open, "mission_scheduler") as mock_ms, \
          patch.object(day_open, "hero_registry") as mock_hr:
+        mock_ms.advance.return_value = None
+        mock_ms.today_slots.return_value = []
         mock_hr.heroes_for_today.side_effect = _heroes_for_today_stub(heroes)
         result = day_open.prepare_day(player)
     assert len(result["death_mails"]) == 1
@@ -51,7 +57,10 @@ def test_prepare_day_revisits_take_priority(fake_repo):
     player = {"id": 1, "current_day": 3, "reputation": 0, "current_phase": "forge_open"}
     fake_repo.players[1] = player
     with patch.object(day_open, "repo", fake_repo), \
+         patch.object(day_open, "mission_scheduler") as mock_ms, \
          patch.object(day_open, "hero_registry") as mock_hr:
+        mock_ms.advance.return_value = None
+        mock_ms.today_slots.return_value = []
         mock_hr.heroes_for_today.side_effect = _heroes_for_today_stub([{"id": 999, "name": "X"}])
         result = day_open.prepare_day(player)
     kinds = [s["kind"] for s in result["schedule"]]
@@ -70,7 +79,10 @@ def test_prepare_day_postpones_overflow_revisits(fake_repo):
     player = {"id": 1, "current_day": 3, "reputation": 0, "current_phase": "forge_open"}
     fake_repo.players[1] = player
     with patch.object(day_open, "repo", fake_repo), \
+         patch.object(day_open, "mission_scheduler") as mock_ms, \
          patch.object(day_open, "hero_registry") as mock_hr:
+        mock_ms.advance.return_value = None
+        mock_ms.today_slots.return_value = []
         mock_hr.heroes_for_today.side_effect = _heroes_for_today_stub([])
         day_open.prepare_day(player)
     postponed = [p for p in fake_repo.pending_outcomes if p["resolve_day"] == 4]
@@ -81,7 +93,10 @@ def test_prepare_day_writes_to_player(fake_repo):
     player = {"id": 1, "current_day": 3, "reputation": 0, "current_phase": "forge_open"}
     fake_repo.players[1] = player
     with patch.object(day_open, "repo", fake_repo), \
+         patch.object(day_open, "mission_scheduler") as mock_ms, \
          patch.object(day_open, "hero_registry") as mock_hr:
+        mock_ms.advance.return_value = None
+        mock_ms.today_slots.return_value = []
         mock_hr.heroes_for_today.side_effect = _heroes_for_today_stub(
             [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}, {"id": 3, "name": "C"}]
         )
@@ -89,3 +104,42 @@ def test_prepare_day_writes_to_player(fake_repo):
     saved = fake_repo.players[1]
     assert saved["current_visitor_index"] == 0
     assert len(saved["day_schedule"]) == 4
+
+
+# --- 012: mission integration ---
+
+def test_prepare_day_prepends_mission_slot(fake_repo, monkeypatch):
+    from app.missions import scheduler as ms, tax, league_chief
+    from app import endgame
+    for mod in (day_open, ms, tax, league_chief, endgame):
+        monkeypatch.setattr(mod, "repo", fake_repo)
+
+    player = {"id": 1, "current_day": 3, "reputation": 0,
+              "current_phase": "forge_open", "gold": 5000, "ending_kind": None}
+    fake_repo.players[1] = player
+    with patch.object(day_open, "hero_registry") as mock_hr:
+        mock_hr.heroes_for_today.side_effect = _heroes_for_today_stub([
+            {"id": 100, "name": "A"}, {"id": 101, "name": "B"}, {"id": 102, "name": "C"},
+        ])
+        result = day_open.prepare_day(player)
+    assert len(result["schedule"]) > 0
+    assert result["schedule"][0]["kind"] == "mission_npc"
+    assert result["schedule"][0]["mission_kind"] == "tax"
+    assert result["schedule"][0]["phase"] == "warning"
+
+
+def test_prepare_day_skips_when_ending_triggered(fake_repo, monkeypatch):
+    from app.missions import scheduler as ms, tax, league_chief
+    from app import endgame
+    for mod in (day_open, ms, tax, league_chief, endgame):
+        monkeypatch.setattr(mod, "repo", fake_repo)
+
+    player = {"id": 1, "current_day": 11, "reputation": 0,
+              "current_phase": "forge_open", "gold": 500, "ending_kind": None}
+    fake_repo.players[1] = player
+    fake_repo.insert_mission({"player_id": 1, "kind": "tax", "phase": "collect",
+                               "due_day": 10, "status": "pending",
+                               "payload": {"amount": 1000}})
+    result = day_open.prepare_day(player)
+    assert fake_repo.players[1]["ending_kind"] == "mission_tax_unpaid"
+    assert result["schedule"] == []
