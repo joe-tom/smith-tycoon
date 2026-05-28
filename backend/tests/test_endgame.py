@@ -4,7 +4,8 @@ from app.endgame import detect_post_battle, detect_day_100, ENDINGS
 def test_endings_have_all_required_fields():
     ids = {e["id"] for e in ENDINGS}
     assert ids == {"surt_killed", "lonely_demon", "forge_burns",
-                   "retirement", "youth_blood", "weapons_broken"}
+                   "retirement", "youth_blood", "weapons_broken",
+                   "mission_tax_unpaid", "mission_league_failed"}
     for e in ENDINGS:
         assert "title" in e and "won" in e and "flavor" in e
 
