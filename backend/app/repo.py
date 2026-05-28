@@ -313,3 +313,38 @@ def append_hero_loot(hero_id: int, items: list[dict[str, Any]]) -> None:
 
 def clear_hero_loot(hero_id: int) -> None:
     _client().table("heroes").update({"loot_pending": []}).eq("id", hero_id).execute()
+
+
+# --- 012: missions ---
+
+def insert_mission(row: dict[str, Any]) -> dict[str, Any]:
+    """UNIQUE (player_id, kind, due_day, phase)로 멱등. 충돌 시 기존 행 반환."""
+    c = _client()
+    existing = c.table("missions").select("*") \
+        .eq("player_id", row["player_id"]).eq("kind", row["kind"]) \
+        .eq("due_day", row["due_day"]).eq("phase", row["phase"]) \
+        .limit(1).execute().data
+    if existing:
+        return existing[0]
+    return c.table("missions").insert(row).execute().data[0]
+
+
+def update_mission(mission_id: int, **fields: Any) -> None:
+    _client().table("missions").update(fields).eq("id", mission_id).execute()
+
+
+def get_mission(mission_id: int) -> dict[str, Any] | None:
+    rows = _client().table("missions").select("*").eq("id", mission_id).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def list_pending_missions(player_id: int) -> list[dict[str, Any]]:
+    return _client().table("missions").select("*") \
+        .eq("player_id", player_id).eq("status", "pending") \
+        .order("due_day").execute().data
+
+
+def list_missions_today(player_id: int, day: int) -> list[dict[str, Any]]:
+    return _client().table("missions").select("*") \
+        .eq("player_id", player_id).eq("due_day", day) \
+        .eq("status", "pending").order("id").execute().data
