@@ -22,7 +22,8 @@ def test_dispatch_writes_pending_and_deletes_weapon(fake_repo):
         result = po.dispatch_hero(player, _hero(), _weapon(), _demon())
     assert "outcome_id" in result
     assert result["outcome"]["hero"] in {"survived", "injured", "died"}
-    assert all(w["id"] != 10 for w in fake_repo.weapons)
+    weapon10 = next(w for w in fake_repo.weapons if w["id"] == 10)
+    assert weapon10["owner"] == "dispatched"
     assert len(fake_repo.pending_outcomes) == 1
     pending = fake_repo.pending_outcomes[0]
     assert pending["depart_day"] == 10

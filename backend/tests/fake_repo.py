@@ -28,7 +28,10 @@ class FakeRepo:
         return next((w for w in self.weapons if w["id"] == weapon_id), None)
 
     def delete_weapon(self, weapon_id: int) -> None:
-        self.weapons = [w for w in self.weapons if w["id"] != weapon_id]
+        for w in self.weapons:
+            if w["id"] == weapon_id:
+                w["owner"] = "dispatched"
+                return
 
     # --- heroes ---
     def get_hero(self, hero_id: int) -> dict[str, Any] | None:

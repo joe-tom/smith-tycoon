@@ -274,4 +274,7 @@ def get_pending(outcome_id: int) -> dict[str, Any] | None:
 
 
 def delete_weapon(weapon_id: int) -> None:
-    _client().table("weapons").delete().eq("id", weapon_id).execute()
+    """소프트 삭제: 'dispatched' 상태로 마킹 (FK 참조 보존).
+    이 상태의 무기는 load_player_weapons/list_sold_weapons에 노출되지 않는다.
+    """
+    _client().table("weapons").update({"owner": "dispatched"}).eq("id", weapon_id).execute()
