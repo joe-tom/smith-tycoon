@@ -150,9 +150,10 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
         floor = int(base * (0.8 if _fits else 0.6))
         if counter < floor:
             counter = floor
-        # 한 라운드 최대 양보폭: 이전 카운터(또는 floor)에서 5%만 — 깐깐하게 조금씩만 올림
+        # 한 라운드 최대 양보폭: 이전 카운터(또는 floor)의 5% × 인내심 배수
         previous = max_hero_counter if max_hero_counter is not None else floor
-        max_raise = int(previous * 0.05)
+        mult = _pat.concession_multiplier(p_current)
+        max_raise = int(previous * 0.05 * mult)
         cap_this_round = previous + max_raise
         if counter > cap_this_round:
             counter = cap_this_round
