@@ -172,11 +172,13 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
 
 
 def player_accept_counter(player: dict, neg_id: int) -> int:
-    """플레이어가 용사의 마지막 카운터를 수락. 합의가로 outcome=accepted 설정."""
+    """플레이어가 용사의 마지막 카운터를 수락. 합의가로 outcome=accepted 설정.
+    멱등: 이미 accepted면 기존 합의가 반환 (재시도 시 일관된 결과)."""
     neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] == "accepted":
+        return int(neg.get("agreed_price") or 0)
     if neg["outcome"] != "open":
         raise ValueError(f"negotiation already {neg['outcome']}")
-    # 가장 최근 hero 라운드의 가격을 합의가로
     hero_rounds = [r for r in neg["rounds"] if r["role"] == "hero" and r.get("price") is not None]
     if not hero_rounds:
         raise ValueError("no hero counter to accept")
@@ -203,13 +205,14 @@ def player_reject(player: dict, neg_id: int) -> None:
     )
 
 
-def finalize_sale(player: dict, neg_id: int) -> None:
+def finalize_sale(player: dict, neg_id: int) -> bool:
+    """무기 양도 + 골드/평판/호감도 적용. 멱등: 이미 finalized면 False 반환하고 no-op."""
     pid = player["id"]
     neg = repo.get_negotiation(neg_id)
+    if neg.get("finalized"):
+        return False
     if neg["outcome"] != "accepted":
         raise ValueError("negotiation not accepted")
-    if neg.get("finalized"):
-        raise ValueError("already_finalized")
     repo.update_negotiation(neg_id, finalized=True)   # 멱등성 — 우선 마킹
     player_now = repo.load_player(pid)
     repo.transfer_weapon_to_hero(neg["weapon_id"], neg["counterparty_id"])
@@ -249,6 +252,7 @@ def finalize_sale(player: dict, neg_id: int) -> None:
                  "hero_id": neg["counterparty_id"], "price": neg["agreed_price"],
                  "affinity_delta": aff_delta, "effort_recover": effort_recover},
     )
+    return True
 
 
 # --- Plan 2: 상인 협상 (매수) ---

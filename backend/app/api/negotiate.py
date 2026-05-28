@@ -34,22 +34,30 @@ async def post_negotiate(req: NegotiateRequest, player: dict = Depends(current_p
 
 
 async def _accept_and_dispatch(player: dict, neg_id: int, agreed_price: int | None = None) -> dict:
-    """공통: 거래 finalize → dispatch_async_battle → advance."""
+    """공통: 거래 finalize → dispatch_async_battle → advance. 재시도에 멱등."""
     try:
-        negotiation.finalize_sale(player, neg_id)
+        did_finalize = negotiation.finalize_sale(player, neg_id)
     except ValueError as e:
         raise HTTPException(400, detail={"error": "cannot_finalize", "message": str(e)})
     player = repo.load_player(player["id"])
     neg = repo.get_negotiation(neg_id)
-    dispatch = await combat.dispatch_async_battle(player, neg["counterparty_id"], neg["weapon_id"])
+    if did_finalize:
+        dispatch = await combat.dispatch_async_battle(player, neg["counterparty_id"], neg["weapon_id"])
+        outcome_id = dispatch["outcome_id"]
+        ending = dispatch.get("ending")
+    else:
+        outcome_id = None
+        ending = None
     player = repo.load_player(player["id"])
-    if dispatch.get("ending"):
-        return {"ok": True, "agreed_price": agreed_price or neg["agreed_price"],
-                "outcome_id": dispatch["outcome_id"],
-                "current_phase": player["current_phase"], "ending": dispatch["ending"]}
-    advance_visitor_phase(player)
-    return {"ok": True, "agreed_price": agreed_price or neg["agreed_price"],
-            "outcome_id": dispatch["outcome_id"],
+    if ending:
+        return {"ok": True, "agreed_price": agreed_price or neg.get("agreed_price"),
+                "outcome_id": outcome_id,
+                "current_phase": player["current_phase"], "ending": ending}
+    # 이미 슬롯이 visitor가 아니면 (이전 호출에서 advance 됐음) advance 스킵
+    if player["current_phase"] == "visitor":
+        advance_visitor_phase(player)
+    return {"ok": True, "agreed_price": agreed_price or neg.get("agreed_price"),
+            "outcome_id": outcome_id,
             "current_phase": player["current_phase"]}
 
 
