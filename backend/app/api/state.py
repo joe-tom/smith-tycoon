@@ -9,26 +9,33 @@ async def _hydrate_visitor(slot: dict, player: dict, pid: int, day: int) -> dict
     """current_visitor 슬롯에 표시용 데이터 attach."""
     kind = slot["kind"]
     hydrated = dict(slot)
+
+    def _enrich(h: dict) -> dict:
+        mode = "enhance" if h.get("held_weapon_id") else "sell"
+        held_weapon = None
+        if mode == "enhance":
+            w = repo.get_weapon(h["held_weapon_id"])
+            if w:
+                held_weapon = {**w, "market_price": negotiation.market_price(w)}
+        return {
+            **h,
+            "preferences": hero_registry.preferences_for(h),
+            "mode": mode,
+            "held_weapon": held_weapon,
+            "lore": h.get("lore") or [],
+            "loot_pending": h.get("loot_pending") or [],
+        }
+
     if kind == "new_hero":
         h = repo.get_hero(slot["hero_id"])
         if h:
-            mode = "enhance" if h.get("held_weapon_id") else "sell"
-            held_weapon = None
-            if mode == "enhance":
-                w = repo.get_weapon(h["held_weapon_id"])
-                held_weapon = {**w, "market_price": negotiation.market_price(w)}
-            hydrated["hero"] = {
-                **h,
-                "preferences": hero_registry.preferences_for(h),
-                "mode": mode,
-                "held_weapon": held_weapon,
-            }
+            hydrated["hero"] = _enrich(h)
     elif kind == "returning_hero":
         pending = repo.get_pending(slot["outcome_id"])
         hero = repo.get_hero(slot["hero_id"])
         if pending and hero:
             recap = await returning_recap.get_or_generate(player, pending, hero)
-            hydrated["hero"] = hero
+            hydrated["hero"] = _enrich(hero)
             hydrated["outcome"] = pending["outcome_json"]
             hydrated["weapon_snapshot"] = pending["weapon_snapshot"]
             hydrated["depart_day"] = pending["depart_day"]
