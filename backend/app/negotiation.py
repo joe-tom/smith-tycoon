@@ -403,10 +403,10 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
         # 상인의 새 카운터는 이전 최저 카운터보다 높아질 수 없음 (양보는 단조 비증가)
         if min_merch_counter is not None and counter > min_merch_counter:
             counter = min_merch_counter
-        # 한 라운드 최대 양보폭: 이전 카운터(또는 asking)에서 5%만.
-        # 상인은 깐깐하게 조금씩만 깎아야 한다.
+        # 한 라운드 최대 양보폭: 이전 카운터(또는 asking)의 5% × 인내심 배수.
         previous = min_merch_counter if min_merch_counter is not None else base
-        max_drop = int(previous * 0.05)
+        mult = _pat.concession_multiplier(p_current)
+        max_drop = int(previous * 0.05 * mult)
         min_counter_this_round = previous - max_drop
         if counter < min_counter_this_round:
             counter = min_counter_this_round

@@ -220,3 +220,113 @@ async def test_step_sell_concession_cap_high_patience_triple_raise(fake_repo, mo
     assert res["decision"] == "counter"
     # base=57, floor=45, previous=45, mult=3.0, max_raise=int(6.75)=6, cap=51
     assert res["counter_price"] == 51
+
+
+# --- step_buy 인내심 양보폭 배수 ---
+
+@pytest.mark.asyncio
+async def test_step_buy_concession_cap_baseline_patience(fake_repo, monkeypatch):
+    """patience=50(기본) → mult=1.0 → 5%만 양보(인하).
+
+    bundle: materials=[{asking_price=100, qty=1, base_price=100, material_id=1}], weapon=None
+    base = bundle_market_price(bundle) = 100
+    previous = base = 100 (이전 상인 카운터 없음)
+    mult = concession_multiplier(50) = 1.0
+    max_drop = int(100 * 0.05 * 1.0) = 5
+    min_counter_this_round = 100 - 5 = 95
+    LLM counter=1 → clamp_price(1, 100)=10 → 10 < 95 → counter = 95
+    player offers 1 (< 95) → stays counter
+    """
+    from unittest.mock import AsyncMock
+
+    fake_repo.players[1] = {
+        "id": 1, "current_day": 1, "current_phase": "merchant", "reputation": 0,
+        "gold": 1000,
+    }
+    monkeypatch.setattr(_neg, "repo", fake_repo)
+    monkeypatch.setattr(_neg, "complete_json", AsyncMock(
+        return_value={"decision": "counter", "counter_price": 1, "message": "이거이거."}
+    ))
+
+    bundle = {
+        "materials": [{"material_id": 1, "base_price": 100, "qty": 1, "asking_price": 100}],
+        "weapon": None,
+    }
+    fake_repo._neg_seq += 1
+    pre_neg_id = fake_repo._neg_seq
+    fake_repo.negotiations.append({
+        "id": pre_neg_id, "player_id": 1,
+        "day": 1, "phase": "merchant",
+        "kind": "buy", "counterparty_id": 10, "weapon_id": None,
+        "materials": bundle, "rounds": [], "outcome": "open",
+        "patience_start": 50, "patience_current": 50,
+    })
+
+    # _client_or_repo_get_merchant은 neg_id 분기 전 무조건 호출됨 — stub 필요
+    monkeypatch.setattr(
+        _neg, "_client_or_repo_get_merchant",
+        lambda merchant_id: {"id": merchant_id, "materials": [], "weapon": None},
+    )
+
+    # player offers 1 (well below any cap) — merchant counters at cap=95
+    res = await _neg.step_buy(
+        fake_repo.players[1], merchant_id=10, price_offered=1,
+        player_message="싸게 주세요", neg_id=pre_neg_id,
+    )
+    assert res["decision"] == "counter"
+    # base=100, previous=100, mult=1.0, max_drop=5, min_counter=95
+    assert res["counter_price"] == 95
+
+
+@pytest.mark.asyncio
+async def test_step_buy_concession_cap_high_patience_triple_drop(fake_repo, monkeypatch):
+    """patience=100 → mult=3.0 → 15%까지 양보(인하).
+
+    bundle: materials=[{asking_price=100, qty=1, base_price=100, material_id=1}], weapon=None
+    base = 100
+    previous = base = 100 (이전 상인 카운터 없음)
+    mult = concession_multiplier(100) = 1.0 + 50/25 = 3.0
+    max_drop = int(100 * 0.05 * 3.0) = 15
+    min_counter_this_round = 100 - 15 = 85
+    LLM counter=1 → clamp_price(1, 100)=10 → 10 < 85 → counter = 85
+    player offers 1 (< 85) → stays counter
+    """
+    from unittest.mock import AsyncMock
+
+    fake_repo.players[1] = {
+        "id": 1, "current_day": 1, "current_phase": "merchant", "reputation": 0,
+        "gold": 1000,
+    }
+    monkeypatch.setattr(_neg, "repo", fake_repo)
+    monkeypatch.setattr(_neg, "complete_json", AsyncMock(
+        return_value={"decision": "counter", "counter_price": 1, "message": "이거이거."}
+    ))
+
+    bundle = {
+        "materials": [{"material_id": 1, "base_price": 100, "qty": 1, "asking_price": 100}],
+        "weapon": None,
+    }
+    fake_repo._neg_seq += 1
+    pre_neg_id = fake_repo._neg_seq
+    fake_repo.negotiations.append({
+        "id": pre_neg_id, "player_id": 1,
+        "day": 1, "phase": "merchant",
+        "kind": "buy", "counterparty_id": 10, "weapon_id": None,
+        "materials": bundle, "rounds": [], "outcome": "open",
+        "patience_start": 100, "patience_current": 100,
+    })
+
+    # _client_or_repo_get_merchant은 neg_id 분기 전 무조건 호출됨 — stub 필요
+    monkeypatch.setattr(
+        _neg, "_client_or_repo_get_merchant",
+        lambda merchant_id: {"id": merchant_id, "materials": [], "weapon": None},
+    )
+
+    # player offers 1 (well below any cap) — merchant counters at cap=85
+    res = await _neg.step_buy(
+        fake_repo.players[1], merchant_id=10, price_offered=1,
+        player_message="많이 깎아주세요", neg_id=pre_neg_id,
+    )
+    assert res["decision"] == "counter"
+    # base=100, previous=100, mult=3.0, max_drop=15, min_counter=85
+    assert res["counter_price"] == 85
