@@ -228,6 +228,106 @@ def decide_outcomes(hero: dict[str, Any], weapon: dict[str, Any] | None,
             "hero_opinion": hero_opinion}
 
 
+async def dispatch_async_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[str, Any]:
+    """비동기 전투: 결과 즉시 결정 + 모든 부수효과 적용. LLM 서술은 재방문 시점으로 지연.
+
+    pending_outcomes에 outcome 박고, weapon DELETE, 사망/파손 카운터·평판·boss event·nickname 모두 처리.
+    phase 전이는 호출측이 advance_visitor로 처리한다.
+    Returns: {outcome_id, outcome, resolve_day, kind, demon}
+    """
+    from . import scheduler, pending_outcomes as po
+    pid = player["id"]
+    hero = repo.get_hero(hero_id)
+    weapon = repo.get_weapon(weapon_id) if weapon_id else None
+    player = repo.load_player(pid)
+    defeated_boss_ids = repo.list_defeated_boss_ids(pid)
+    demon = roll_demon(day=player["current_day"], defeated_boss_ids=defeated_boss_ids)
+
+    seed = po._outcome_seed(pid, player["current_day"], hero_id)
+    outcomes = decide_outcomes(hero, weapon, demon, seed=seed)
+    delta = apply_outcomes(outcomes)
+    if outcomes["demon"] == "killed" and demon.get("is_boss"):
+        delta["reputation"] += 10
+
+    extra: dict[str, Any] = {}
+    if outcomes["hero"] == "died":
+        extra["heroes_died_total"] = int(player.get("heroes_died_total", 0)) + 1
+    if outcomes["weapon"] == "destroyed":
+        extra["weapons_destroyed_total"] = int(player.get("weapons_destroyed_total", 0)) + 1
+    repo.update_player(pid, reputation=player["reputation"] + delta["reputation"], **extra)
+
+    label = po._outcome_label(outcomes["hero"])
+    resolve_day = scheduler.resolve_day_for(label, player["current_day"], seed=seed + 7)
+    kind = po._kind_for(outcomes["hero"])
+    weapon_snapshot = dict(weapon) if weapon else {}
+    saved = repo.insert_pending_outcome({
+        "player_id": pid,
+        "hero_id": hero_id,
+        "depart_day": player["current_day"],
+        "resolve_day": resolve_day,
+        "kind": kind,
+        "outcome_json": {**outcomes, "demon": demon, "monsters_killed": 1 if outcomes["demon"] == "killed" else 0},
+        "weapon_snapshot": weapon_snapshot,
+    })
+
+    sr_outcome = outcomes["hero"] if outcomes["hero"] in ("survived", "fled", "died") else "survived"
+    hero_fields = hero_registry.schedule_return(sr_outcome, current_day=player["current_day"])
+    hero_fields["return_day"] = resolve_day  # 재방문 시점 일치
+    if outcomes.get("weapon") == "destroyed":
+        hero_fields["held_weapon_id"] = None
+        current_aff = int(hero.get("affinity", 0))
+        hero_fields["affinity"] = affinity_mod.clamp_affinity(current_aff - 5)
+    repo.update_hero(hero_id, **hero_fields)
+
+    if outcomes.get("hero") == "survived" and outcomes.get("demon") == "killed":
+        consecutive = repo.count_consecutive_survives(pid, hero_id) + 1
+        refreshed_hero = repo.get_hero(hero_id)
+        if nickname_mod.should_award(refreshed_hero, consecutive):
+            recent_demons = [demon["type"]]
+            picked = await nickname_mod.award(refreshed_hero, consecutive, recent_demons)
+            if picked:
+                repo.update_hero(hero_id, nickname=picked)
+                repo.insert_day_event(
+                    pid, day=player["current_day"], phase=player["current_phase"],
+                    kind="nickname", payload={"hero_id": hero_id, "nickname": picked},
+                )
+
+    battle_row = repo.insert_battle(pid, {
+        "day": player["current_day"], "hero_id": hero_id, "weapon_id": weapon_id,
+        "demon": demon, "script_text": "", "outcomes": outcomes,
+    })
+    repo.insert_day_event(
+        pid, day=player["current_day"], phase=player["current_phase"], kind="battle",
+        payload={"battle_id": battle_row["id"], "outcomes": outcomes,
+                 "hero_id": hero_id, "demon": demon, "rep_delta": delta["reputation"]},
+    )
+    if outcomes["demon"] == "killed" and demon.get("is_boss"):
+        repo.insert_day_event(
+            pid, day=player["current_day"], phase=player["current_phase"], kind="boss_kill",
+            payload={"boss_id": demon["boss_id"], "boss_name": demon["type"],
+                     "sin": demon.get("sin"), "battle_id": battle_row["id"]},
+        )
+        if demon["boss_id"] == "surt":
+            repo.insert_day_event(
+                pid, day=player["current_day"], phase=player["current_phase"], kind="surt_kill",
+                payload={"boss_id": "surt", "boss_name": demon["type"],
+                         "battle_id": battle_row["id"], "final": True},
+            )
+
+    if weapon:
+        repo.delete_weapon(weapon["id"])
+
+    post_player = repo.load_player(pid)
+    ending = endgame.detect_post_battle(post_player, repo.list_defeated_boss_ids(pid))
+    if ending:
+        endgame.apply_ending(pid, ending)
+
+    return {
+        "outcome_id": saved["id"], "outcome": outcomes, "resolve_day": resolve_day,
+        "kind": kind, "demon": demon, "ending": ending,
+    }
+
+
 async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[str, Any]:
     pid = player["id"]
     hero = repo.get_hero(hero_id)

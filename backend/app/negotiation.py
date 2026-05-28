@@ -44,7 +44,6 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
             pid, day=player_now["current_day"], phase=player_now["current_phase"],
             kind="reject", payload={"by": "hero_blacklist", "hero_id": hero_id, "rep_delta": 0},
         )
-        repo.update_player(pid, current_phase=state_machine.next_phase(player_now["current_phase"]))
         return {
             "negotiation_id": -1,
             "decision": "reject",
@@ -161,7 +160,6 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
         repo.update_player(
             pid,
             reputation=player_now["reputation"] - 1,
-            current_phase=state_machine.next_phase(player_now["current_phase"]),
         )
     repo.update_negotiation(neg_id, **update)
 
@@ -202,7 +200,6 @@ def player_reject(player: dict, neg_id: int) -> None:
     repo.update_player(
         pid,
         reputation=player_now["reputation"] - 1,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
 
@@ -226,10 +223,10 @@ def finalize_sale(player: dict, neg_id: int) -> None:
     else:
         effort_recover = 0
     new_effort_after_sale = min(100, int(player_now.get("effort", 0)) + effort_recover)
+    # phase 진행은 호출측(api/negotiate.py)이 dispatch_hero + advance_visitor로 처리한다.
     repo.update_player(pid, gold=player_now["gold"] + neg["agreed_price"],
                        reputation=player_now["reputation"] + 1,
-                       effort=new_effort_after_sale,
-                       current_phase=state_machine.next_phase(player_now["current_phase"]))
+                       effort=new_effort_after_sale)
     hero = repo.get_hero(neg["counterparty_id"])
     weapon = repo.get_weapon(neg["weapon_id"])
 
@@ -347,9 +344,8 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
         update["agreed_price"] = safe_price
     elif decision == "reject":
         update["outcome"] = "rejected"
-        # 상인 reject 시 phase advance + merchant 정리 (평판 변화는 §7.2: 즉시 거절 0)
-        player_now = repo.load_player(pid)
-        repo.update_player(pid, current_phase=state_machine.next_phase(player_now["current_phase"]))
+        # 상인 reject 시 merchant 정리 (평판 변화는 §7.2: 즉시 거절 0).
+        # phase advance는 호출측에서 처리.
         repo.update_merchant_today(neg["counterparty_id"], outcome="done")
     repo.update_negotiation(neg_id, **update)
 
@@ -396,7 +392,6 @@ def finalize_buy(player: dict, neg_id: int) -> None:
         pid,
         gold=player_now["gold"] - neg["agreed_price"],
         reputation=player_now["reputation"] + 1,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
     repo.update_merchant_today(neg["counterparty_id"], outcome="done")
@@ -440,7 +435,6 @@ def player_reject_buy(player: dict, neg_id: int) -> None:
     repo.update_player(
         pid,
         reputation=player_now["reputation"] + rep_delta,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
     repo.update_merchant_today(neg["counterparty_id"], outcome="done")
 
@@ -559,7 +553,6 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
         repo.update_player(
             pid,
             reputation=player_now["reputation"] - 1,
-            current_phase=state_machine.next_phase(player_now["current_phase"]),
         )
     repo.update_negotiation(neg_id, **update)
 
@@ -602,7 +595,6 @@ def finalize_enhance(player: dict, neg_id: int) -> None:
         pid,
         gold=player_now["gold"] + neg["agreed_price"],
         reputation=player_now["reputation"] + 1,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
     ratio = neg["agreed_price"] / max(base_estimate, 1)
@@ -653,5 +645,4 @@ def player_reject_enhance(player: dict, neg_id: int) -> None:
     repo.update_player(
         pid,
         reputation=player_now["reputation"] - 1,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
