@@ -542,7 +542,7 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
                        selected_materials: list[dict[str, int]] | None = None
                        ) -> dict[str, Any]:
     pid = player["id"]
-    from . import enhancement as enh_mod
+    from . import enhancement as enh_mod, patience as _pat
     hero = repo.get_hero(hero_id)
     weapon_id = hero.get("held_weapon_id")
     if not weapon_id:
@@ -571,11 +571,13 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
 
         base_estimate = enh_mod.bundle_estimate(weapon, sub_materials)
         player_data = repo.load_player(pid)
+        p_start_val = _pat.hero_start(hero)
         neg = repo.insert_negotiation(pid, {
             "day": player_data["current_day"], "phase": player_data["current_phase"],
             "kind": "enhance", "counterparty_id": hero_id, "weapon_id": weapon_id,
             "materials": {"selected": sub_materials, "base_estimate": base_estimate},
             "rounds": [], "outcome": "open",
+            "patience_start": p_start_val, "patience_current": p_start_val,
         })
         neg_id = neg["id"]
         prior_rounds: list[dict[str, Any]] = []
@@ -586,6 +588,14 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
         base_estimate = neg["materials"]["base_estimate"]
 
     safe_price = min(max(1, int(price_offered)), hero_gold)
+
+    # 인내심 추적
+    p_current = int(neg.get("patience_current") or _pat.hero_start(hero))
+    if prior_rounds:
+        last_player = next((r for r in reversed(prior_rounds) if r["role"] == "player"), None)
+        conceded = bool(last_player and int(last_player.get("price") or 0) < safe_price)
+        p_current = _pat.next_after_round(p_current, conceded=conceded)
+        repo.update_negotiation(neg_id, patience_current=p_current)
 
     hero_prior_counters = [int(r["price"]) for r in prior_rounds
                             if r["role"] == "hero" and r.get("price") is not None]
@@ -609,8 +619,14 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
     counter = llm.get("counter_price")
     if counter is not None:
         counter = max(1, int(counter))
-        if max_hero_counter is not None and counter < max_hero_counter:
-            counter = max_hero_counter
+        if max_hero_counter is not None:
+            # 단조 비감소: 용사는 이전 최고 제시가보다 낮게 제시할 수 없음
+            if counter < max_hero_counter:
+                counter = max_hero_counter
+            # 인내심 기반 양보폭 상한: 직전가 대비 5% × 배수까지만 올릴 수 있음 (라운드 2+)
+            mult = _pat.concession_multiplier(p_current)
+            max_raise = int(max_hero_counter * 0.05 * mult)
+            counter = min(counter, max_hero_counter + max_raise)
         counter = min(counter, hero_gold)
         if counter >= safe_price:
             decision = "accept"

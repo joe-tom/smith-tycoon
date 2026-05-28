@@ -330,3 +330,196 @@ async def test_step_buy_concession_cap_high_patience_triple_drop(fake_repo, monk
     assert res["decision"] == "counter"
     # base=100, previous=100, mult=3.0, max_drop=15, min_counter=85
     assert res["counter_price"] == 85
+
+
+# --- step_enhance 인내심 양보폭 배수 ---
+
+def _enhance_pre_neg(fake_repo, hero_id: int, weapon_id: int,
+                     max_hero_counter: int, patience_current: int,
+                     prior_player_price: int = 999) -> int:
+    """Round 2 시나리오용: 이전 라운드에 hero counter 기록이 있는 협상을 세팅.
+
+    prior_player_price: 직전 라운드 플레이어 제시가. 양보 여부(conceded) 계산에 영향.
+      - conceded = (prior_player_price < 이번_safe_price)
+      - 양보 없으면 patience -10, 있으면 -5.
+    patience_current: 이번 라운드 시작 전 값. 감소 후 값이 테스트 기대치가 됨.
+    """
+    fake_repo._neg_seq += 1
+    neg_id = fake_repo._neg_seq
+    fake_repo.negotiations.append({
+        "id": neg_id, "player_id": 1,
+        "day": 1, "phase": "enhance",
+        "kind": "enhance", "counterparty_id": hero_id, "weapon_id": weapon_id,
+        "materials": {
+            "selected": [{"material_id": 1, "name": "철", "category": "일반",
+                          "attribute": None, "qty": 1}],
+            "base_estimate": 100,
+        },
+        "rounds": [
+            {"role": "player", "message": "부탁합니다", "price": prior_player_price},
+            {"role": "hero", "message": "좀 더 주시오.", "price": max_hero_counter},
+        ],
+        "outcome": "open",
+        "patience_start": patience_current,
+        "patience_current": patience_current,
+    })
+    return neg_id
+
+
+@pytest.mark.asyncio
+async def test_step_enhance_concession_baseline_patience(fake_repo, monkeypatch):
+    """patience=50(기본) → mult=1.0 → 5%까지만 카운터 상승.
+
+    max_hero_counter = 200 (직전 라운드 hero 제시가)
+    patience 추적:
+      prior_player_price=999, safe_price=500 → conceded=(999<500)=False → p -10
+      patience_current seeded at 60 → after decrement: p_current=50
+    mult = concession_multiplier(50) = 1.0
+    max_raise = int(200 * 0.05 * 1.0) = 10
+    cap = 200 + 10 = 210
+    LLM counter=9999 → min(9999, 210) = 210 (hero_gold=1000 > 210)
+    player offers 500 > 210 → stays counter, counter_price = 210
+    """
+    from unittest.mock import AsyncMock
+
+    fake_repo.heroes.append({
+        "id": 1, "player_id": 1, "name": "H", "job": "검사",
+        "str": 5, "mag": 5, "personality_tags": [],  # patience_start = 50
+        "affinity": 0, "history": [], "gold": 1000, "lore": [], "loot_pending": [],
+        "held_weapon_id": 10,
+    })
+    fake_repo.weapons.append({
+        "id": 10, "player_id": 1, "owner": "hero", "name": "검", "type": "검",
+        "rarity": 0, "sharpness": 30,
+        "materials_used": [{"category": "일반"}],
+        "attribute": None,
+    })
+    fake_repo.players[1] = {
+        "id": 1, "current_day": 1, "current_phase": "enhance", "reputation": 0,
+    }
+    monkeypatch.setattr(_neg, "repo", fake_repo)
+    monkeypatch.setattr(_neg, "complete_json", AsyncMock(
+        return_value={"decision": "counter", "counter_price": 9999, "message": "더 주시오."}
+    ))
+
+    # patience_current=60, prior_player_price=999, safe_price=500
+    # conceded=(999<500)=False → p -10 → p_current=50 → mult=1.0
+    neg_id = _enhance_pre_neg(fake_repo, hero_id=1, weapon_id=10,
+                               max_hero_counter=200, patience_current=60,
+                               prior_player_price=999)
+
+    # player offers 500 (> cap=210) → hero counters at 210
+    res = await _neg.step_enhance(
+        fake_repo.players[1], hero_id=1, price_offered=500,
+        player_message="500에 해주세요", neg_id=neg_id,
+    )
+    assert res["decision"] == "counter"
+    # p_current=50, mult=1.0, max_raise=int(200*0.05*1.0)=10, cap=210
+    assert res["counter_price"] == 210
+
+
+@pytest.mark.asyncio
+async def test_step_enhance_concession_high_patience_triple_raise(fake_repo, monkeypatch):
+    """patience=100 → mult=3.0 → 15%까지 카운터 상승.
+
+    max_hero_counter = 200
+    patience 추적:
+      prior_player_price=1, safe_price=500 → conceded=(1<500)=True → p -5
+      patience_current seeded at 105 → after decrement: p_current=100
+    mult = concession_multiplier(100) = 1.0 + 50/25 = 3.0
+    max_raise = int(200 * 0.05 * 3.0) = 30
+    cap = 200 + 30 = 230
+    LLM counter=9999 → min with hero_gold=1000=1000, then cap → min(1000, 230) = 230
+    player offers 500 > 230 → stays counter, counter_price = 230
+    """
+    from unittest.mock import AsyncMock
+
+    fake_repo.heroes.append({
+        "id": 2, "player_id": 1, "name": "G", "job": "검사",
+        "str": 5, "mag": 5, "personality_tags": [],
+        "affinity": 0, "history": [], "gold": 1000, "lore": [], "loot_pending": [],
+        "held_weapon_id": 20,
+    })
+    fake_repo.weapons.append({
+        "id": 20, "player_id": 1, "owner": "hero", "name": "장검", "type": "검",
+        "rarity": 0, "sharpness": 30,
+        "materials_used": [{"category": "일반"}],
+        "attribute": None,
+    })
+    fake_repo.players[1] = {
+        "id": 1, "current_day": 1, "current_phase": "enhance", "reputation": 0,
+    }
+    monkeypatch.setattr(_neg, "repo", fake_repo)
+    monkeypatch.setattr(_neg, "complete_json", AsyncMock(
+        return_value={"decision": "counter", "counter_price": 9999, "message": "더 주시오."}
+    ))
+
+    # patience_current=105, prior_player_price=1, safe_price=500
+    # conceded=(1<500)=True → p -5 → p_current=100 → mult=3.0
+    neg_id = _enhance_pre_neg(fake_repo, hero_id=2, weapon_id=20,
+                               max_hero_counter=200, patience_current=105,
+                               prior_player_price=1)
+
+    # player offers 500 (> cap=230) → hero counters at 230
+    res = await _neg.step_enhance(
+        fake_repo.players[1], hero_id=2, price_offered=500,
+        player_message="500에 해주세요", neg_id=neg_id,
+    )
+    assert res["decision"] == "counter"
+    # p_current=100, mult=3.0, max_raise=int(200*0.05*3.0)=30, cap=230
+    assert res["counter_price"] == 230
+
+
+@pytest.mark.asyncio
+async def test_step_enhance_concession_no_cap_round_one(fake_repo, monkeypatch):
+    """첫 라운드 (no prior hero counter) → cap 미작동, LLM counter 그대로 통과.
+
+    max_hero_counter = None → concession cap block skipped entirely.
+    LLM counter=150, player offers 500 > 150 → decision=counter, counter_price=150.
+    """
+    from unittest.mock import AsyncMock
+
+    fake_repo.heroes.append({
+        "id": 3, "player_id": 1, "name": "K", "job": "검사",
+        "str": 5, "mag": 5, "personality_tags": [],
+        "affinity": 0, "history": [], "gold": 1000, "lore": [], "loot_pending": [],
+        "held_weapon_id": 30,
+    })
+    fake_repo.weapons.append({
+        "id": 30, "player_id": 1, "owner": "hero", "name": "단검", "type": "검",
+        "rarity": 0, "sharpness": 30,
+        "materials_used": [{"category": "일반"}],
+        "attribute": None,
+    })
+    fake_repo.players[1] = {
+        "id": 1, "current_day": 1, "current_phase": "enhance", "reputation": 0,
+    }
+    monkeypatch.setattr(_neg, "repo", fake_repo)
+    monkeypatch.setattr(_neg, "complete_json", AsyncMock(
+        return_value={"decision": "counter", "counter_price": 150, "message": "150 주시오."}
+    ))
+
+    # Pre-seed negotiation with no prior rounds (round 1 scenario)
+    fake_repo._neg_seq += 1
+    neg_id = fake_repo._neg_seq
+    fake_repo.negotiations.append({
+        "id": neg_id, "player_id": 1,
+        "day": 1, "phase": "enhance",
+        "kind": "enhance", "counterparty_id": 3, "weapon_id": 30,
+        "materials": {
+            "selected": [{"material_id": 1, "name": "철", "category": "일반",
+                          "attribute": None, "qty": 1}],
+            "base_estimate": 100,
+        },
+        "rounds": [],  # 첫 라운드 — prior hero counters 없음
+        "outcome": "open",
+        "patience_start": 50, "patience_current": 50,
+    })
+
+    # player offers 500 → LLM counter 150 passes through cap (no max_hero_counter)
+    res = await _neg.step_enhance(
+        fake_repo.players[1], hero_id=3, price_offered=500,
+        player_message="500에 해주세요", neg_id=neg_id,
+    )
+    assert res["decision"] == "counter"
+    assert res["counter_price"] == 150
