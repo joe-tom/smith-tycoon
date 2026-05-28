@@ -1,26 +1,74 @@
 import pytest
-from app.enhancement import roll_delta, apply_to_weapon
+from app.enhancement import roll_delta, apply_to_weapon, quality_score, _max_delta
 
 
-@pytest.mark.parametrize("category,sharp_min,sharp_max,rar_min,rar_max", [
-    ("일반",   1, 3, 0, 2),
-    ("이상한", 0, 2, 0, 2),
-    ("특수",   3, 7, 2, 5),
-    ("전설",   7, 15, 5, 12),
+# --- cap (스탯의 1.4배 = +40%) ---
+
+@pytest.mark.parametrize("current,expected_max_delta", [
+    (10, 4),     # 10*0.4=4
+    (30, 12),    # 30*0.4=12
+    (50, 20),
+    (100, 40),
+    (0, 3),      # MIN_DELTA_FLOOR
+    (5, 3),      # max(3, int(2)) = 3
 ])
-def test_roll_delta_per_category(category, sharp_min, sharp_max, rar_min, rar_max):
-    for seed in range(30):
-        d = roll_delta([{"category": category, "qty": 1}], seed=seed)
-        assert sharp_min <= d["sharpness"] <= sharp_max
-        assert rar_min <= d["rarity"] <= rar_max
+def test_max_delta_caps_at_40pct_with_min_floor(current, expected_max_delta):
+    assert _max_delta(current) == expected_max_delta
 
 
-def test_roll_delta_sums_multiple_materials():
-    for seed in range(10):
-        d = roll_delta([{"category": "일반", "qty": 1}, {"category": "특수", "qty": 1}], seed=seed)
-        assert d["sharpness"] >= 1 + 3
-        assert d["rarity"] >= 0 + 2
+# --- quality_score ---
 
+def test_quality_score_floor():
+    assert quality_score([]) == 0.2  # QUALITY_FLOOR
+
+
+def test_quality_score_normal_single():
+    assert quality_score([{"category": "일반", "qty": 1}]) == 0.2  # 0.1 but floored
+
+
+def test_quality_score_legendary_caps_at_1():
+    assert quality_score([{"category": "전설", "qty": 5}]) == 1.0
+
+
+def test_quality_score_sums_materials():
+    # 특수×1 (0.5) + 일반×3 (0.3) = 0.8
+    assert quality_score([{"category": "특수", "qty": 1},
+                          {"category": "일반", "qty": 3}]) == 0.8
+
+
+# --- roll_delta cap respect ---
+
+def test_roll_delta_respects_cap_for_high_quality():
+    weapon = {"sharpness": 30, "rarity": 20}
+    for seed in range(20):
+        d = roll_delta(weapon, [{"category": "전설", "qty": 1}], seed=seed)
+        assert 0 <= d["sharpness"] <= _max_delta(30)  # ≤ 12
+        assert 0 <= d["rarity"] <= _max_delta(20)     # ≤ 8
+
+
+def test_roll_delta_low_quality_gives_smaller_deltas():
+    weapon = {"sharpness": 50, "rarity": 50}
+    low = []
+    high = []
+    for seed in range(50):
+        d_low = roll_delta(weapon, [{"category": "일반", "qty": 1}], seed=seed)
+        d_high = roll_delta(weapon, [{"category": "전설", "qty": 1}], seed=seed)
+        low.append(d_low["sharpness"])
+        high.append(d_high["sharpness"])
+    # 평균적으로 전설이 더 큰 delta를 만들어야 함
+    assert sum(high) / len(high) > sum(low) / len(low)
+
+
+def test_roll_delta_with_zero_stat_uses_min_floor():
+    # current=0이어도 MIN_DELTA_FLOOR(=3) 덕분에 progression 가능
+    weapon = {"sharpness": 0, "rarity": 0}
+    for seed in range(20):
+        d = roll_delta(weapon, [{"category": "전설", "qty": 1}], seed=seed)
+        assert 0 <= d["sharpness"] <= 3
+        assert 0 <= d["rarity"] <= 3
+
+
+# --- apply_to_weapon (변경 없음) ---
 
 def test_apply_to_weapon_caps_at_100():
     w = {"sharpness": 95, "rarity": 90, "enhancement_level": 0, "materials_used": []}

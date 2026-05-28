@@ -700,7 +700,7 @@ def finalize_enhance(player: dict, neg_id: int) -> dict[str, Any]:
         "rarity": weapon["rarity"],
         "enhancement_level": weapon.get("enhancement_level", 0),
     }
-    delta = enh_mod.roll_delta(sub_materials)
+    delta = enh_mod.roll_delta(weapon, sub_materials)
     new_weapon = enh_mod.apply_to_weapon(weapon, delta, sub_materials)
     repo.update_weapon(
         weapon["id"],
