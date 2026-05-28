@@ -50,6 +50,20 @@ export const api = {
   visitorSkip: () => request<{ ok: true; current_phase: string }>("POST", "/visitor/current/skip"),
   mailAck: (id: number) => request<{ ok: true }>("POST", `/mail/${id}/ack`),
 
+  chitchat: (player_message: string = "") =>
+    request<{ lore_text: string; entry: { day: number; text: string } }>(
+      "POST", "/visitor/current/chitchat", { player_message }),
+
+  lootNegotiate: (price_offered: number, player_message: string, negotiation_id: number | null = null) =>
+    request<NegotiateResponse & { patience_current?: number; patience_start?: number }>(
+      "POST", "/loot/negotiate", { price_offered, player_message, negotiation_id }),
+  lootPlayerAccept: (negotiation_id: number) =>
+    request<{ ok: true }>("POST", "/loot/player_accept", { negotiation_id }),
+  lootPlayerReject: (negotiation_id: number) =>
+    request<{ ok: true }>("POST", "/loot/player_reject", { negotiation_id }),
+  lootFinalize: (negotiation_id: number) =>
+    request<{ ok: true }>("POST", "/loot/finalize", { negotiation_id }),
+
   merchantNegotiate: (
     merchant_id: number,
     price_offered: number,

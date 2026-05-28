@@ -27,6 +27,18 @@ export interface HeroPreferences {
   stat_hint: string;
 }
 
+export interface LoreEntry {
+  day: number;
+  text: string;
+}
+
+export interface LootItem {
+  material_id: number;
+  qty: number;
+  asking_price?: number;
+  name?: string;
+}
+
 export interface Hero {
   id: number;
   name: string;
@@ -39,10 +51,12 @@ export interface Hero {
   affinity: number;
   visit_count?: number;
   preferences?: HeroPreferences;
-  // Plan 3 신규
   nickname?: string | null;
   mode?: "sell" | "enhance";
   held_weapon?: Weapon | null;
+  // 011 (2차 배치)
+  lore?: LoreEntry[];
+  loot_pending?: LootItem[];
 }
 
 export interface Player {
