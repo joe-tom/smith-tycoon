@@ -101,7 +101,7 @@ export interface MerchantToday {
   outcome: "pending" | "done";
 }
 
-export type VisitorKind = "new_hero" | "returning_hero" | "merchant";
+export type VisitorKind = "new_hero" | "returning_hero" | "merchant" | "mission_npc";
 
 export interface WeaponSnapshot {
   id?: number;
@@ -133,6 +133,13 @@ export interface CurrentVisitor {
   depart_day?: number;
   recap?: string;
   merchant?: MerchantToday;
+  // mission_npc
+  mission_id?: number;
+  mission_kind?: "tax" | "league_chief";
+  phase?: string;
+  amount?: number;
+  threshold?: number;
+  deadline?: number;
 }
 
 export interface DeathMail {

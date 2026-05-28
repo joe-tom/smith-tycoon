@@ -50,6 +50,10 @@ export const api = {
   visitorSkip: () => request<{ ok: true; current_phase: string }>("POST", "/visitor/current/skip"),
   mailAck: (id: number) => request<{ ok: true }>("POST", `/mail/${id}/ack`),
 
+  visitorMissionAction: (action: "pay" | "ack" | "skip") =>
+    request<{ ok: true; current_phase?: string; ending?: string }>(
+      "POST", "/visitor/current/mission_action", { action }),
+
   chitchat: (player_message: string = "") =>
     request<{ lore_text: string; entry: { day: number; text: string } }>(
       "POST", "/visitor/current/chitchat", { player_message }),
