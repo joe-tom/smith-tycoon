@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends
-from .. import repo, hero_registry, merchant as merchant_module, negotiation
+from .. import repo, hero_registry, merchant as merchant_module, negotiation, returning_recap
 from ..auth import current_player
 
 router = APIRouter()
 
 
-def _hydrate_visitor(slot: dict, pid: int, day: int) -> dict:
+async def _hydrate_visitor(slot: dict, player: dict, pid: int, day: int) -> dict:
     """current_visitor 슬롯에 표시용 데이터 attach."""
     kind = slot["kind"]
     hydrated = dict(slot)
@@ -27,10 +27,12 @@ def _hydrate_visitor(slot: dict, pid: int, day: int) -> dict:
         pending = repo.get_pending(slot["outcome_id"])
         hero = repo.get_hero(slot["hero_id"])
         if pending and hero:
+            recap = await returning_recap.get_or_generate(player, pending, hero)
             hydrated["hero"] = hero
             hydrated["outcome"] = pending["outcome_json"]
             hydrated["weapon_snapshot"] = pending["weapon_snapshot"]
             hydrated["depart_day"] = pending["depart_day"]
+            hydrated["recap"] = recap
     elif kind == "merchant":
         m = repo.get_merchant_today(pid, day)
         if m is None:
@@ -41,7 +43,7 @@ def _hydrate_visitor(slot: dict, pid: int, day: int) -> dict:
 
 
 @router.get("/state")
-def get_state(player: dict = Depends(current_player)):
+async def get_state(player: dict = Depends(current_player)):
     pid = player["id"]
     day = player["current_day"]
     phase = player["current_phase"]
@@ -53,7 +55,7 @@ def get_state(player: dict = Depends(current_player)):
     idx = player.get("current_visitor_index", 0)
     current_visitor = None
     if phase == "visitor" and idx < len(schedule):
-        current_visitor = _hydrate_visitor(schedule[idx], pid, day)
+        current_visitor = await _hydrate_visitor(schedule[idx], player, pid, day)
 
     death_mails: list = []
     if phase == "forge_open":
