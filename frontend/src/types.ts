@@ -158,6 +158,8 @@ export interface NegotiateResponse {
   decision: "accept" | "reject" | "counter";
   counter_price: number | null;
   message: string;
+  patience_current?: number;
+  patience_start?: number;
 }
 
 export interface Demon {

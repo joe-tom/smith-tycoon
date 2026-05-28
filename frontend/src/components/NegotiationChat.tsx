@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { Hero, Weapon, NegotiateResponse } from "../types";
+import { PatienceGauge } from "./PatienceGauge";
 
 interface ChatMsg { role: "player" | "hero"; message: string; price?: number | null }
 
@@ -78,6 +79,8 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
           <small style={{ marginLeft: 8, color: "#888" }}>· 첫 방문</small>
         )}
       </h2>
+      <PatienceGauge current={last?.patience_current} start={last?.patience_start}
+                     label={`${hero.name}의 인내심`} />
 
       <div style={{ marginBottom: 8 }}>
         <label>판매할 무기:&nbsp;
