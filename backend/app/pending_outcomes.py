@@ -55,6 +55,9 @@ def dispatch_hero(
     if weapon:
         repo.delete_weapon(weapon["id"])
 
+    # 출정 기간 동안 ready 풀에서 제외 (resolve_day 전까진 가게에 안 들름)
+    repo.update_hero(hero["id"], return_day=resolve_day)
+
     return {
         "outcome_id": saved["id"],
         "outcome": outcome,

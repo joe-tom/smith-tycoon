@@ -55,12 +55,13 @@ export function HeroVisitorPanel({
       )}
       <p>호감도 {hero.affinity ?? 0} · 보유 금화 {hero.gold ?? 0}</p>
       <div style={{ display: "grid", gap: 8, marginTop: 12, maxWidth: 320 }}>
-        <button className="btn" disabled={!hasWeapons} onClick={() => setMode("sell")}>
-          무기 판매{!hasWeapons && " (인벤토리 비어있음)"}
-        </button>
-        <button className="btn" disabled={!hasHeld} onClick={() => setMode("enhance")}>
-          무기 강화{!hasHeld && " (들고 있는 무기 없음)"}
-        </button>
+        {hasHeld ? (
+          <button className="btn" onClick={() => setMode("enhance")}>무기 강화</button>
+        ) : (
+          <button className="btn" disabled={!hasWeapons} onClick={() => setMode("sell")}>
+            무기 판매{!hasWeapons && " (인벤토리 비어있음)"}
+          </button>
+        )}
         <button className="btn" disabled={!hasLoot} onClick={() => setMode("loot")}>
           전리품 매수{!hasLoot && " (전리품 없음)"}
         </button>

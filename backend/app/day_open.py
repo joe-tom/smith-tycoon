@@ -41,7 +41,9 @@ def prepare_day(player: dict[str, Any]) -> dict[str, Any]:
 
     n_new = sum(1 for s in schedule if s["kind"] == "new_hero")
     if n_new > 0:
-        heroes = hero_registry.heroes_for_today(player_id, day, count=n_new)
+        exclude_ids = {r["hero_id"] for r in revisit_entries}
+        heroes = hero_registry.heroes_for_today(player_id, day, count=n_new,
+                                                exclude_ids=exclude_ids)
         idx = 0
         for s in schedule:
             if s["kind"] == "new_hero":

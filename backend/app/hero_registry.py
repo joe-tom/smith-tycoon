@@ -61,10 +61,12 @@ def generate_hero(seed: int | None = None) -> dict[str, Any]:
     }
 
 
-def heroes_for_today(player_id: int, day: int, count: int = 3) -> list[dict[str, Any]]:
+def heroes_for_today(player_id: int, day: int, count: int = 3,
+                     exclude_ids: set[int] | None = None) -> list[dict[str, Any]]:
     """오늘 등장할 용사 목록 — 첫 호출에서 결정·persist 후 동일.
 
     seed = (player_id * 1_000_003 + day * 31 + slot * 7) & 0xFFFFFFFF
+    exclude_ids: 풀에서 제외할 hero_id 집합 (오늘 returning_hero로 잡힌 용사 등).
     """
     events = repo.list_day_events(player_id, day)
     roster = next((e for e in events if e["kind"] == "hero_roster"), None)
@@ -72,7 +74,8 @@ def heroes_for_today(player_id: int, day: int, count: int = 3) -> list[dict[str,
         ids = roster["payload"]["hero_ids"]
         return [repo.get_hero(hid) for hid in ids]
 
-    ready = repo.list_alive_heroes_ready(player_id, day)
+    excluded = exclude_ids or set()
+    ready = [h for h in repo.list_alive_heroes_ready(player_id, day) if h["id"] not in excluded]
     ready.sort(key=lambda h: (h.get("return_day") or 0))
     picked = ready[:count]
     for slot in range(count - len(picked)):

@@ -3,8 +3,10 @@ from app import day_open
 
 
 def _heroes_for_today_stub(heroes):
-    def _stub(player_id, day, count=3):
-        return heroes[:count]
+    def _stub(player_id, day, count=3, exclude_ids=None):
+        excluded = exclude_ids or set()
+        filtered = [h for h in heroes if h["id"] not in excluded]
+        return filtered[:count]
     return _stub
 
 
