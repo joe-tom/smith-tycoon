@@ -4,51 +4,65 @@ from ..auth import current_player
 
 router = APIRouter()
 
-NEGOTIATE_PHASES = ["hero1_negotiate", "hero2_negotiate", "hero3_negotiate"]
-BATTLE_PHASES = ["hero1_battle", "hero2_battle", "hero3_battle"]
 
-
-def _hero_index(phase: str) -> int | None:
-    mapping = {"hero1_negotiate": 0, "hero1_battle": 0,
-               "hero2_negotiate": 1, "hero2_battle": 1,
-               "hero3_negotiate": 2, "hero3_battle": 2}
-    return mapping.get(phase)
-
-
-@router.get("/state")
-def get_state(player: dict = Depends(current_player)):
-    # current_player always returns a valid player dict (creating one if needed).
-    pid = player["id"]
-    inventory = repo.load_inventory(pid)
-    weapons = [{**w, "market_price": negotiation.market_price(w)}
-               for w in repo.load_player_weapons(pid)]
-
-    hero = None
-    if player["current_phase"] in NEGOTIATE_PHASES + BATTLE_PHASES:
-        todays = hero_registry.heroes_for_today(pid, player["current_day"])
-        idx = _hero_index(player["current_phase"])
-        if idx is not None and idx < len(todays):
-            h = todays[idx]
+def _hydrate_visitor(slot: dict, pid: int, day: int) -> dict:
+    """current_visitor 슬롯에 표시용 데이터 attach."""
+    kind = slot["kind"]
+    hydrated = dict(slot)
+    if kind == "new_hero":
+        h = repo.get_hero(slot["hero_id"])
+        if h:
             mode = "enhance" if h.get("held_weapon_id") else "sell"
             held_weapon = None
             if mode == "enhance":
                 w = repo.get_weapon(h["held_weapon_id"])
                 held_weapon = {**w, "market_price": negotiation.market_price(w)}
-            hero = {
+            hydrated["hero"] = {
                 **h,
                 "preferences": hero_registry.preferences_for(h),
                 "mode": mode,
                 "held_weapon": held_weapon,
             }
-
-    merchant_today = None
-    if player["current_phase"] == "merchant_negotiate":
-        m = repo.get_merchant_today(pid, player["current_day"])
+    elif kind == "returning_hero":
+        pending = repo.get_pending(slot["outcome_id"])
+        hero = repo.get_hero(slot["hero_id"])
+        if pending and hero:
+            hydrated["hero"] = hero
+            hydrated["outcome"] = pending["outcome_json"]
+            hydrated["weapon_snapshot"] = pending["weapon_snapshot"]
+            hydrated["depart_day"] = pending["depart_day"]
+    elif kind == "merchant":
+        m = repo.get_merchant_today(pid, day)
         if m is None:
-            bundle = merchant_module.generate_today(pid, player["current_day"])
-            m = repo.insert_merchant_today(pid, {"day": player["current_day"], **bundle,
-                                                  "outcome": "pending"})
-        merchant_today = m
+            bundle = merchant_module.generate_today(pid, day)
+            m = repo.insert_merchant_today(pid, {"day": day, **bundle, "outcome": "pending"})
+        hydrated["merchant"] = m
+    return hydrated
+
+
+@router.get("/state")
+def get_state(player: dict = Depends(current_player)):
+    pid = player["id"]
+    day = player["current_day"]
+    phase = player["current_phase"]
+    inventory = repo.load_inventory(pid)
+    weapons = [{**w, "market_price": negotiation.market_price(w)}
+               for w in repo.load_player_weapons(pid)]
+
+    schedule = player.get("day_schedule") or []
+    idx = player.get("current_visitor_index", 0)
+    current_visitor = None
+    if phase == "visitor" and idx < len(schedule):
+        current_visitor = _hydrate_visitor(schedule[idx], pid, day)
+
+    death_mails: list = []
+    if phase == "forge_open":
+        pending = repo.list_pending_to_resolve(pid, day)
+        death_mails = [
+            {"id": p["id"], "hero_id": p["hero_id"],
+             "weapon_snapshot": p["weapon_snapshot"], "outcome": p["outcome_json"]}
+            for p in pending if p["kind"] == "death_mail" and not p["consumed"]
+        ]
 
     boss_kill_count = len(repo.list_defeated_boss_ids(pid))
 
@@ -56,7 +70,9 @@ def get_state(player: dict = Depends(current_player)):
         "player": player,
         "inventory": inventory,
         "weapons": weapons,
-        "hero": hero,
-        "merchant": merchant_today,
+        "current_visitor": current_visitor,
+        "day_schedule": schedule,
+        "current_visitor_index": idx,
+        "death_mails": death_mails,
         "boss_kill_count": boss_kill_count,
     }

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from .. import repo, forge, state_machine
+from .. import repo, forge, state_machine, day_open
 from ..models import ForgeRequest, WeaponOut
 from ..auth import current_player
 
@@ -30,6 +30,8 @@ def post_forge_skip(player: dict = Depends(current_player)):
         state_machine.assert_phase_in(player["current_phase"], FORGE_PHASES)
     except state_machine.PhaseError:
         raise HTTPException(400, detail={"error": "wrong_phase", "current_phase": player["current_phase"]})
+    # forge_open → visitor 전이 시 그 날 스케줄 생성
+    day_open.prepare_day(player)
     repo.update_player(player["id"], current_phase=state_machine.next_phase(player["current_phase"]))
     player_now = repo.load_player(player["id"])
     return {"ok": True, "next_phase": player_now["current_phase"]}
