@@ -14,7 +14,10 @@ def _material_value(m: dict[str, Any]) -> int:
 
 
 def market_price(weapon: dict[str, Any]) -> int:
-    mat_value = sum(_material_value(m) for m in weapon["materials_used"])
+    # materials_used: 제작 시 들어간 재료들 + (apply_to_weapon이 추가한) 강화 기록
+    # {"action": "enhance", ...} 항목은 가격 계산 대상 아님 — category가 있는 재료만.
+    mat_value = sum(_material_value(m) for m in weapon["materials_used"]
+                    if "category" in m)
     rarity_mult = 1 + weapon["rarity"] / 100
     sharp_mult = 1 + weapon["sharpness"] / 200
     return max(10, int(mat_value * rarity_mult * sharp_mult))
