@@ -314,7 +314,9 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
                              if r["role"] == "merchant" and r.get("price") is not None]
     min_merch_counter = min(merch_prior_counters) if merch_prior_counters else None
 
-    if min_merch_counter is not None and safe_price >= min_merch_counter:
+    # 자동 수락: 플레이어 가격이 (상인 최저 카운터) 또는 (asking 가격) 이상이면 무조건 accept
+    auto_accept_threshold = min_merch_counter if min_merch_counter is not None else base
+    if safe_price >= auto_accept_threshold:
         llm = {
             "decision": "accept",
             "counter_price": None,
@@ -334,9 +336,19 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
     counter = llm.get("counter_price")
     if counter is not None:
         counter = clamp_price(int(counter), base)
-        # 상인의 새 카운터는 이전 최저 카운터보다 높아질 수 없음
+        # 상인의 새 카운터는 이전 최저 카운터보다 높아질 수 없음 (양보는 단조 비증가)
         if min_merch_counter is not None and counter > min_merch_counter:
             counter = min_merch_counter
+        # 상인의 카운터는 base의 70% 미만으로 내려가지 않음 (자기 의향가 후퇴 방지)
+        floor = int(base * 0.7)
+        if counter < floor:
+            counter = floor
+        # 카운터가 플레이어 제시가 이하면 자동 accept (플레이어가 더 비싸게 부른 셈)
+        if counter <= safe_price:
+            decision = "accept"
+            llm = {**llm, "decision": "accept", "counter_price": None,
+                   "message": f"좋소, {safe_price} 골드에 드리지요."}
+            counter = None
 
     new_rounds = prior_rounds + [
         {"role": "player", "message": player_message, "price": safe_price},
