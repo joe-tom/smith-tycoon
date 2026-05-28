@@ -1,49 +1,65 @@
 import pytest
-from app.state_machine import (
-    next_phase, assert_phase, advance_to_next_day,
-    INITIAL_PHASE, PHASES, PhaseError,
-)
+from app import state_machine as sm
 
 
-def test_initial_phase_is_forge_open():
-    assert INITIAL_PHASE == "forge_open"
+def test_phases_simplified():
+    assert sm.PHASES == ["forge_open", "visitor", "day_summary"]
+    assert sm.INITIAL_PHASE == "forge_open"
 
 
-def test_phase_sequence():
-    expected = [
-        "forge_open", "hero1_negotiate", "hero1_battle",
-        "merchant_negotiate",
-        "hero2_negotiate", "hero2_battle",
-        "hero3_negotiate", "hero3_battle",
-        "day_summary",
-    ]
-    for i in range(len(expected) - 1):
-        assert next_phase(expected[i]) == expected[i + 1]
+def test_next_phase_normal():
+    assert sm.next_phase("forge_open") == "visitor"
+    assert sm.next_phase("visitor") == "day_summary"
+    assert sm.next_phase("day_summary") == "next_day"
 
 
-def test_day_summary_next_goes_back_to_forge_open_marker():
-    assert next_phase("day_summary") == "next_day"
+def test_next_phase_unknown_raises():
+    with pytest.raises(sm.PhaseError):
+        sm.next_phase("hero1_negotiate")
+    with pytest.raises(sm.PhaseError):
+        sm.next_phase("game_over")
 
 
-def test_game_over_has_no_next():
-    with pytest.raises(PhaseError):
-        next_phase("game_over")
+def test_advance_to_next_day_increments():
+    player = {"current_day": 1, "current_phase": "day_summary",
+              "current_visitor_index": 5, "day_schedule": [{"kind": "merchant"}]}
+    sm.advance_to_next_day(player)
+    assert player["current_day"] == 2
+    assert player["current_phase"] == "forge_open"
+    assert player["current_visitor_index"] == 0
+    assert player["day_schedule"] == []
 
 
-def test_assert_phase_match_and_mismatch():
-    assert_phase("forge_open", "forge_open")
-    with pytest.raises(PhaseError):
-        assert_phase("hero1_negotiate", "forge_open")
+def test_advance_to_next_day_game_over_at_max():
+    player = {"current_day": sm.MAX_DAY, "current_phase": "day_summary",
+              "current_visitor_index": 0, "day_schedule": []}
+    sm.advance_to_next_day(player)
+    assert player["current_phase"] == "game_over"
 
 
-def test_advance_to_next_day_increments_day_and_resets_phase():
-    p = {"current_day": 1, "current_phase": "day_summary"}
-    advance_to_next_day(p)
-    assert p == {"current_day": 2, "current_phase": "forge_open"}
+def test_advance_visitor_increments_index():
+    player = {"current_phase": "visitor", "current_visitor_index": 0,
+              "day_schedule": [{"kind": "new_hero"}, {"kind": "merchant"}, {"kind": "new_hero"}]}
+    sm.advance_visitor(player)
+    assert player["current_visitor_index"] == 1
+    assert player["current_phase"] == "visitor"
 
 
-def test_advance_to_next_day_at_max_day_goes_to_game_over():
-    from app.state_machine import MAX_DAY
-    p = {"current_day": MAX_DAY, "current_phase": "day_summary"}
-    advance_to_next_day(p)
-    assert p == {"current_day": MAX_DAY, "current_phase": "game_over"}
+def test_advance_visitor_last_slot_transitions_to_summary():
+    player = {"current_phase": "visitor", "current_visitor_index": 1,
+              "day_schedule": [{"kind": "merchant"}, {"kind": "new_hero"}]}
+    sm.advance_visitor(player)
+    assert player["current_phase"] == "day_summary"
+
+
+def test_advance_visitor_outside_visitor_phase_raises():
+    player = {"current_phase": "forge_open", "current_visitor_index": 0,
+              "day_schedule": []}
+    with pytest.raises(sm.PhaseError):
+        sm.advance_visitor(player)
+
+
+def test_assert_phase():
+    sm.assert_phase("forge_open", "forge_open")
+    with pytest.raises(sm.PhaseError):
+        sm.assert_phase("forge_open", "visitor")
