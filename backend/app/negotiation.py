@@ -112,13 +112,19 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
         # 용사의 새 카운터는 이전 최고 카운터보다 낮아질 수 없음 (자기 의향가 후퇴 금지)
         if max_hero_counter is not None and counter < max_hero_counter:
             counter = max_hero_counter
-        # 시세 대비 합리적 최저선 — 선호 맞으면 70%, 안 맞으면 50%
+        # 시세 대비 합리적 최저 시작가 — 선호 맞으면 80%, 안 맞으면 60%
         from . import hero_registry as _hr
         _prefs = _hr.preferences_for(hero)
         _fits = weapon["type"] in _prefs.get("types", [])
-        floor = int(base * (0.7 if _fits else 0.5))
+        floor = int(base * (0.8 if _fits else 0.6))
         if counter < floor:
             counter = floor
+        # 한 라운드 최대 양보폭: 이전 카운터(또는 floor)에서 5%만 — 깐깐하게 조금씩만 올림
+        previous = max_hero_counter if max_hero_counter is not None else floor
+        max_raise = int(previous * 0.05)
+        cap_this_round = previous + max_raise
+        if counter > cap_this_round:
+            counter = cap_this_round
         # 용사는 자기 보유 금화 이상으론 못 산다 — counter를 hero_gold로 캡
         counter = min(counter, hero_gold)
 
