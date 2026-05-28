@@ -239,3 +239,39 @@ def list_defeated_boss_ids(player_id: int) -> set[str]:
     rows = _client().table("day_events").select("payload") \
         .eq("player_id", player_id).eq("kind", "boss_kill").execute().data
     return {r["payload"]["boss_id"] for r in rows if r.get("payload", {}).get("boss_id")}
+
+
+# --- 009: pending_outcomes ---
+
+def insert_pending_outcome(row: dict[str, Any]) -> dict[str, Any]:
+    return _client().table("pending_outcomes").insert(row).execute().data[0]
+
+
+def list_pending_to_resolve(player_id: int, day: int) -> list[dict[str, Any]]:
+    return _client().table("pending_outcomes").select("*") \
+        .eq("player_id", player_id).eq("resolve_day", day).eq("consumed", False) \
+        .order("id").execute().data
+
+
+def mark_pending_consumed(outcome_id: int) -> None:
+    _client().table("pending_outcomes").update({"consumed": True}) \
+        .eq("id", outcome_id).execute()
+
+
+def update_pending_resolve_day(outcome_id: int, new_day: int) -> None:
+    _client().table("pending_outcomes").update({"resolve_day": new_day}) \
+        .eq("id", outcome_id).execute()
+
+
+def update_pending_outcome(outcome_id: int, **fields: Any) -> None:
+    _client().table("pending_outcomes").update(fields).eq("id", outcome_id).execute()
+
+
+def get_pending(outcome_id: int) -> dict[str, Any] | None:
+    rows = _client().table("pending_outcomes").select("*") \
+        .eq("id", outcome_id).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def delete_weapon(weapon_id: int) -> None:
+    _client().table("weapons").delete().eq("id", weapon_id).execute()
