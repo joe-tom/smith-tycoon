@@ -40,7 +40,7 @@ async def post_merchant_negotiate(req: MerchantNegotiateRequest, player: dict = 
         raise HTTPException(400, detail={"error": "merchant_mismatch"})
     selected = [s.model_dump() for s in (req.selected_materials or [])]
     try:
-        return await negotiation.step_buy(
+        result = await negotiation.step_buy(
             player, m["id"], req.price_offered, req.player_message,
             neg_id=req.negotiation_id,
             selected_materials=selected if req.negotiation_id is None else None,
@@ -48,6 +48,11 @@ async def post_merchant_negotiate(req: MerchantNegotiateRequest, player: dict = 
         )
     except ValueError as e:
         raise HTTPException(400, detail={"error": "selection_invalid", "message": str(e)})
+    # 협상 결렬되면 상인 슬롯 끝 — 자동으로 다음 visitor로 advance
+    if result.get("decision") == "reject":
+        repo.update_merchant_today(m["id"], outcome="done")
+        _refresh_and_advance(player["id"])
+    return result
 
 
 @router.post("/merchant/negotiate/finalize")
