@@ -19,7 +19,7 @@ export function HeroVisitorPanel({
   const hasWeapons = state.weapons.length > 0;
   const hasHeld = hero.mode === "enhance" && !!hero.held_weapon;
   const hasLoot = (hero.loot_pending?.length ?? 0) > 0;
-  const canChitchat = (hero.affinity ?? 0) >= 0;
+  const canChitchat = (hero.affinity ?? 0) >= 10;
 
   const back = async () => { await refresh(); setMode("menu"); };
   const sendAway = async () => {

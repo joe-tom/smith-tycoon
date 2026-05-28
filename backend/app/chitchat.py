@@ -7,7 +7,7 @@ from .llm.client import complete_json
 
 async def converse(player: dict[str, Any], hero: dict[str, Any],
                     player_message: str = "") -> dict[str, Any]:
-    if int(hero.get("affinity", 0)) < 0:
+    if int(hero.get("affinity", 0)) < 10:
         raise ValueError("affinity_too_low")
     recent_lore = (hero.get("lore") or [])[-3:]
     llm = await complete_json(

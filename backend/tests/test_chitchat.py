@@ -5,7 +5,7 @@ from app import chitchat
 @pytest.mark.asyncio
 async def test_converse_appends_lore(fake_repo, monkeypatch):
     hero = {"id": 1, "name": "H", "job": "검사", "personality_tags": [],
-            "affinity": 0, "history": [], "lore": []}
+            "affinity": 10, "history": [], "lore": []}
     fake_repo.heroes.append(hero)
     monkeypatch.setattr(chitchat, "repo", fake_repo)
     result = await chitchat.converse({"id": 1, "current_day": 5}, hero, "안녕")
@@ -16,9 +16,10 @@ async def test_converse_appends_lore(fake_repo, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_converse_blocked_by_negative_affinity(fake_repo, monkeypatch):
+async def test_converse_blocked_by_low_affinity(fake_repo, monkeypatch):
+    # 0 starts can't chitchat — needs ≥ 10
     hero = {"id": 1, "name": "H", "job": "검사", "personality_tags": [],
-            "affinity": -10, "history": [], "lore": []}
+            "affinity": 0, "history": [], "lore": []}
     monkeypatch.setattr(chitchat, "repo", fake_repo)
     with pytest.raises(ValueError):
         await chitchat.converse({"id": 1, "current_day": 1}, hero, "")
@@ -27,7 +28,7 @@ async def test_converse_blocked_by_negative_affinity(fake_repo, monkeypatch):
 @pytest.mark.asyncio
 async def test_converse_caps_lore_at_20(fake_repo, monkeypatch):
     hero = {"id": 1, "name": "H", "job": "검사", "personality_tags": [],
-            "affinity": 0, "history": [],
+            "affinity": 10, "history": [],
             "lore": [{"day": d, "text": f"old {d}"} for d in range(20)]}
     fake_repo.heroes.append(hero)
     monkeypatch.setattr(chitchat, "repo", fake_repo)
