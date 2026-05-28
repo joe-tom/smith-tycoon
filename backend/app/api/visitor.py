@@ -42,6 +42,21 @@ def finish_returning_hero(player: dict = Depends(current_player)):
 
 @router.post("/current/skip")
 def skip_visitor(player: dict = Depends(current_player)):
-    """협상 거절·상인 패스 등 일반 advance."""
-    _current_slot(player)
+    """협상 거절·상인 패스 등 일반 advance. mission_npc 슬롯은 on_action skip 거침."""
+    slot = _current_slot(player)
+    if slot["kind"] == "mission_npc":
+        from .. import endgame
+        from ..missions import module_for
+        mission = repo.get_mission(int(slot["mission_id"]))
+        if mission:
+            mod = module_for(mission["kind"])
+            try:
+                result = mod.on_action(player, mission, "skip")
+            except ValueError as e:
+                raise HTTPException(400, detail={"error": "invalid_action",
+                                                 "message": str(e)})
+            ending = result.get("ending_kind")
+            if ending:
+                endgame.apply_ending(player["id"], ending)
+                return {"ok": True, "ending": ending}
     return {"ok": True, **advance(player)}
