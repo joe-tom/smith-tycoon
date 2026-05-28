@@ -78,7 +78,10 @@ def generate_today(player_id: int, day: int, seed: int | None = None) -> dict[st
 
 
 def bundle_market_price(bundle: dict[str, Any]) -> int:
-    total = sum(m["base_price"] * m.get("qty", 1) for m in bundle["materials"])
+    """상인 묶음의 협상 기준가 — 상인이 부르는 asking_price 합계.
+    재료·무기 둘 다 asking_price 사용 (이미 상인 마크업 반영됨)."""
+    total = sum(int(m.get("asking_price") or m["base_price"] * m.get("qty", 1))
+                for m in bundle["materials"])
     if bundle.get("weapon"):
-        total += bundle["weapon"]["asking_price"]
+        total += int(bundle["weapon"]["asking_price"])
     return max(10, total)
