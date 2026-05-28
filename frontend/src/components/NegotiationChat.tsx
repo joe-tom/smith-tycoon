@@ -8,13 +8,14 @@ interface ChatMsg { role: "player" | "hero"; message: string; price?: number | n
 export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons: Weapon[]; onDone: () => void }) {
   const [selectedId, setSelectedId] = useState<number>(weapons[0].id);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
-  const [price, setPrice] = useState<number>(500);
+  const weapon = weapons.find((w) => w.id === selectedId) ?? weapons[0];
+  // 시세의 1.5배를 협상 시작가로 (3배 상한 안에서 약간의 여유)
+  const defaultOffer = Math.max(10, Math.round((weapon.market_price ?? 100) * 1.5));
+  const [price, setPrice] = useState<number>(defaultOffer);
   const [text, setText] = useState<string>("");
   const [last, setLast] = useState<NegotiateResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  const weapon = weapons.find((w) => w.id === selectedId) ?? weapons[0];
   const negotiationStarted = msgs.length > 0;
   const [showFormula, setShowFormula] = useState(false);
 
