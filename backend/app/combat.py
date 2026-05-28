@@ -217,7 +217,15 @@ def decide_outcomes(hero: dict[str, Any], weapon: dict[str, Any] | None,
         destroy_p = max(0.05, 0.5 - sharp / 200) * (1.0 if ratio >= 1.0 else 1.5)
         weapon_r = "destroyed" if rng.random() < destroy_p else "preserved"
 
-    return {"hero": hero_r, "weapon": weapon_r, "demon": demon_r}
+    if weapon_r == "destroyed":
+        hero_opinion = "weapon_broke"
+    elif hero_r == "survived" and demon_r != "killed":
+        hero_opinion = "want_better_weapon"
+    else:
+        hero_opinion = "none"
+
+    return {"hero": hero_r, "weapon": weapon_r, "demon": demon_r,
+            "hero_opinion": hero_opinion}
 
 
 async def run_battle(player: dict, hero_id: int, weapon_id: int | None) -> dict[str, Any]:
