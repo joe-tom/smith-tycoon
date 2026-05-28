@@ -732,3 +732,4 @@ def player_reject_enhance(player: dict, neg_id: int) -> None:
         pid,
         reputation=player_now["reputation"] - 1,
     )
+
