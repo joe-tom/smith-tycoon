@@ -900,11 +900,15 @@ def finalize_buy_loot(player: dict, neg_id: int) -> bool:
     new_aff = affinity_mod.clamp_affinity(int(hero.get("affinity", 0)) + 5)
     repo.update_hero(hero_id, affinity=new_aff)
     repo.clear_hero_loot(hero_id)
+    enriched_items = []
+    for it in items:
+        mat = repo.get_material(int(it["material_id"]))
+        enriched_items.append({**it, "name": mat["name"] if mat else f"재료 #{it['material_id']}"})
     repo.insert_day_event(
         pid, day=player_now["current_day"], phase=player_now["current_phase"],
         kind="loot_sale",
         payload={"negotiation_id": neg_id, "hero_id": hero_id, "price": price,
-                 "items": items, "affinity_delta": 5},
+                 "items": enriched_items, "affinity_delta": 5},
     )
     return True
 

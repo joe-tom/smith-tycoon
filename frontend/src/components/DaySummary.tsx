@@ -46,6 +46,22 @@ function formatEvent(e: DayEvent): string {
       if (by === "player_buy") return `상인 협상 결렬${repTag(rep)}`;
       return `협상 거절${repTag(rep)}`;
     }
+    case "enhance": {
+      const d = (p.delta as { sharpness?: number; rarity?: number }) ?? {};
+      const ds = d.sharpness ?? 0, dr = d.rarity ?? 0;
+      const af = Number(p.affinity_delta ?? 0);
+      return `강화: 무기 #${p.weapon_id} (용사 #${p.hero_id}) — 예리도 +${ds}, 희귀도 +${dr}, ${p.price}골드 (호감도 ${af >= 0 ? "+" : ""}${af})`;
+    }
+    case "loot_sale": {
+      const items = (p.items as Array<{ material_id: number; qty: number; name?: string }>) ?? [];
+      const itemTxt = items.map((it) => `${it.name ?? `재료#${it.material_id}`}×${it.qty}`).join(", ");
+      const af = Number(p.affinity_delta ?? 0);
+      return `전리품 매수: ${itemTxt} ← 용사 #${p.hero_id}, ${p.price}골드 지불 (호감도 ${af >= 0 ? "+" : ""}${af})`;
+    }
+    case "patience_exhausted": {
+      const rep = Number(p.rep_delta ?? -1);
+      return `상대 인내심 소진으로 협상 종료${repTag(rep)}`;
+    }
     case "boss_kill": {
       const p = e.payload as { boss_name?: string; sin?: string };
       return `⚜ 보스 처치: ${p.boss_name ?? ""}${p.sin ? ` (${p.sin})` : ""}`;
