@@ -1,19 +1,21 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { Hero, Weapon, NegotiateResponse } from "../types";
+import { PatienceGauge } from "./PatienceGauge";
 
 interface ChatMsg { role: "player" | "hero"; message: string; price?: number | null }
 
 export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons: Weapon[]; onDone: () => void }) {
   const [selectedId, setSelectedId] = useState<number>(weapons[0].id);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
-  const [price, setPrice] = useState<number>(500);
+  const weapon = weapons.find((w) => w.id === selectedId) ?? weapons[0];
+  // 시세의 1.5배를 협상 시작가로 (3배 상한 안에서 약간의 여유)
+  const defaultOffer = Math.max(10, Math.round((weapon.market_price ?? 100) * 1.5));
+  const [price, setPrice] = useState<number>(defaultOffer);
   const [text, setText] = useState<string>("");
   const [last, setLast] = useState<NegotiateResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  const weapon = weapons.find((w) => w.id === selectedId) ?? weapons[0];
   const negotiationStarted = msgs.length > 0;
   const [showFormula, setShowFormula] = useState(false);
 
@@ -78,6 +80,8 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
           <small style={{ marginLeft: 8, color: "#888" }}>· 첫 방문</small>
         )}
       </h2>
+      <PatienceGauge current={last?.patience_current} start={last?.patience_start}
+                     label={`${hero.name}의 인내심`} />
 
       <div style={{ marginBottom: 8 }}>
         <label>판매할 무기:&nbsp;
@@ -183,15 +187,21 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <label>제시 가격:&nbsp;
-              <input type="number" value={price} max={hero.gold}
-                     onChange={(e) => setPrice(Math.min(hero.gold, Math.max(0, Number(e.target.value))))} />
-            </label>
-            <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 500))} disabled={busy}>−500</button>
-            <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 100))} disabled={busy}>−100</button>
-            <button className="btn" onClick={() => setPrice((p) => Math.min(hero.gold, p + 100))} disabled={busy}>+100</button>
-            <button className="btn" onClick={() => setPrice((p) => Math.min(hero.gold, p + 500))} disabled={busy}>+500</button>
-            <small>최대 {hero.gold} 골드 (용사 보유)</small>
+            {(() => {
+              const priceCap = Math.min(hero.gold, (weapon.market_price ?? Infinity) * 3);
+              const clamp = (p: number) => Math.min(priceCap, Math.max(0, p));
+              return (<>
+                <label>제시 가격:&nbsp;
+                  <input type="number" value={price} max={priceCap}
+                         onChange={(e) => setPrice(clamp(Number(e.target.value)))} />
+                </label>
+                <button className="btn" onClick={() => setPrice((p) => clamp(p - 500))} disabled={busy}>−500</button>
+                <button className="btn" onClick={() => setPrice((p) => clamp(p - 100))} disabled={busy}>−100</button>
+                <button className="btn" onClick={() => setPrice((p) => clamp(p + 100))} disabled={busy}>+100</button>
+                <button className="btn" onClick={() => setPrice((p) => clamp(p + 500))} disabled={busy}>+500</button>
+                <small>최대 {priceCap} 골드 (시세×3 / 용사 보유 중 낮은 값)</small>
+              </>);
+            })()}
           </div>
           {negotiationStarted && (
             <textarea rows={2} style={{ width: "100%", marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)}

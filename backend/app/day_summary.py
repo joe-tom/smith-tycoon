@@ -26,15 +26,15 @@ def summarize_events(events: list[dict[str, Any]]) -> dict[str, Any]:
             s["gold_delta"] -= int(p.get("price", 0))
             s["rep_delta"] += 1
             s["rep_breakdown"]["buy"] += 1
-        elif k == "battle":
+        elif k == "dispatch":
+            # 출정 — 결과는 재방문 전까지 비공개. 평판 변화만 집계.
             s["battles"] += 1
-            out = p.get("outcomes", {})
-            if out.get("hero") == "survived":  s["heroes_survived"] += 1
-            elif out.get("hero") == "injured": s["heroes_injured"] += 1
-            elif out.get("hero") == "died":    s["heroes_died"] += 1
             d = int(p.get("rep_delta", 0))
             s["rep_delta"] += d
             s["rep_breakdown"]["battle"] += d
+        elif k == "battle":
+            # 옛 동기 전투 event (legacy). 안전하게 무시.
+            pass
         elif k == "skip":
             d = int(p.get("rep_delta", -1))
             s["rep_delta"] += d

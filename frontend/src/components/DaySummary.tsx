@@ -30,14 +30,9 @@ function formatEvent(e: DayEvent): string {
       const tail = w?.name ? `${items ? ", " : ""}${w.name}` : "";
       return `구매: ${items}${tail} → ${p.price}골드 지불 (평판 +1)`;
     }
-    case "battle": {
-      const o = (p.outcomes as Record<string, string>) ?? {};
-      const d = (p.demon as { type?: string; difficulty?: number }) ?? {};
-      const heroR = HERO_RESULT_KR[o.hero] ?? o.hero;
-      const wR = WEAPON_RESULT_KR[o.weapon] ?? o.weapon;
-      const dR = DEMON_RESULT_KR[o.demon] ?? o.demon;
+    case "dispatch": {
       const rep = Number(p.rep_delta ?? 0);
-      return `전투: 용사 #${p.hero_id} vs ${d.type} (난이도 ${d.difficulty}) — 용사 ${heroR}, 무기 ${wR}, 마왕군 ${dR}${repTag(rep)}`;
+      return `출정: 용사 #${p.hero_id} 떠남 (결과는 재방문 시점에 확인)${repTag(rep)}`;
     }
     case "skip": {
       const rep = Number(p.rep_delta ?? -1);
@@ -107,7 +102,7 @@ export function DaySummary({ onDone }: { onDone: () => void }) {
         <li>제작: {s.forges}건</li>
         <li>판매: {s.sales}건</li>
         <li>구매: {s.buys}건</li>
-        <li>전투: {s.battles}건 (생존 {s.heroes_survived} / 부상 {s.heroes_injured} / 사망 {s.heroes_died})</li>
+        <li>출정: {s.battles}건 (결과는 재방문 시점에 확인)</li>
         <li>골드 변화: {s.gold_delta >= 0 ? "+" : ""}{s.gold_delta}</li>
         <li>
           평판 변화: <strong>{s.rep_delta >= 0 ? "+" : ""}{s.rep_delta}</strong>

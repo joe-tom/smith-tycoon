@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../api";
 import type { Hero, Weapon, Material, NegotiateResponse } from "../types";
+import { PatienceGauge } from "./PatienceGauge";
 
 interface ChatMsg { role: "player" | "hero"; message: string; price?: number | null }
 
@@ -119,6 +120,7 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
   return (
     <div>
       <h2>강화 비용 협상 — {hero.name}{hero.nickname ? ` "${hero.nickname}"` : ""}</h2>
+      <PatienceGauge current={last?.patience_current} start={last?.patience_start} label={`${hero.name}의 인내심`} />
       <p>강화 대상: <strong>{weapon.name}</strong> <small>· {weapon.attribute ?? "무"}</small> (예리도 {weapon.sharpness}, 희귀도 {weapon.rarity})</p>
       <p>투입 재료: {Object.entries(picks).map(([k, v]) => {
         const mat = inventory.find((m) => m.material_id === Number(k));

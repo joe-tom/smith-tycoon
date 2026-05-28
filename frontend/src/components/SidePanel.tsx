@@ -14,7 +14,7 @@ export function SidePanel({ state, onReset }: { state: StateResponse; onReset: (
 
       <h4>인벤토리</h4>
       <ul>
-        {state.inventory.map((m) => (
+        {state.inventory.filter((m) => m.qty > 0).map((m) => (
           <li key={m.material_id}>
             {m.name} × {m.qty} <small>({m.category} · {m.attribute ?? "무"})</small>
           </li>

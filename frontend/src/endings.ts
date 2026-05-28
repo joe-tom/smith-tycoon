@@ -23,4 +23,12 @@ export const ENDINGS: Record<string, { title: string; won: boolean; flavor: stri
     title: "⚔️ 우리나라 청년들은 너 때문에 죽은 거야", won: false,
     flavor: "당신이 만든 무기 200개가 마왕군 앞에서 부러졌다. 살아 돌아온 용사들의 손에는 부러진 자루만 남았고, 그들의 분노는 당신을 향한다.",
   },
+  mission_tax_unpaid: {
+    title: "💸 세금 미납", won: false,
+    flavor: "징수관이 마지막 통첩을 보냈고 당신은 끝내 1000골드를 내지 못했다. 마을에서 쫓겨났고 대장간 문은 자물쇠로 잠겼다.",
+  },
+  mission_league_failed: {
+    title: "🏛️ 한자조합의 인장", won: false,
+    flavor: "상인조합장의 기한 안에 평판 50을 채우지 못했다. 한자의 그늘 아래 당신의 가게는 강제로 폐업됐다.",
+  },
 };

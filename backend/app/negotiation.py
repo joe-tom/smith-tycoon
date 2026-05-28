@@ -21,7 +21,7 @@ def market_price(weapon: dict[str, Any]) -> int:
 
 
 def clamp_price(price: int, base: int) -> int:
-    return max(int(base * 0.1), min(int(base * 5.0), price))
+    return max(int(base * 0.1), min(int(base * 3.0), price))
 
 
 async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: int,
@@ -44,7 +44,6 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
             pid, day=player_now["current_day"], phase=player_now["current_phase"],
             kind="reject", payload={"by": "hero_blacklist", "hero_id": hero_id, "rep_delta": 0},
         )
-        repo.update_player(pid, current_phase=state_machine.next_phase(player_now["current_phase"]))
         return {
             "negotiation_id": -1,
             "decision": "reject",
@@ -53,18 +52,49 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
         }
     ceiling = int(base * max_pct)
 
+    from . import patience as _pat
     if neg_id is None:
         player_now2 = repo.load_player(pid)
+        p_start = _pat.hero_start(hero)
         neg = repo.insert_negotiation(pid, {
             "day": player_now2["current_day"], "phase": player_now2["current_phase"],
             "kind": "sell", "counterparty_id": hero_id, "weapon_id": weapon_id,
             "rounds": [], "outcome": "open",
+            "patience_start": p_start, "patience_current": p_start,
         })
         neg_id = neg["id"]
         prior_rounds: list[dict[str, Any]] = []
     else:
         neg = repo.get_negotiation(neg_id)
         prior_rounds = neg["rounds"]
+
+    # 인내심 감소 (첫 라운드는 감소 X — prior_rounds 비어있으면 skip)
+    p_current = int(neg.get("patience_current") or _pat.hero_start(hero))
+    p_start = int(neg.get("patience_start") or p_current)
+    if prior_rounds:
+        last_player = next((r for r in reversed(prior_rounds) if r["role"] == "player"), None)
+        conceded = bool(last_player and safe_price < int(last_player.get("price") or 0))
+        p_current = _pat.next_after_round(p_current, conceded=conceded)
+        repo.update_negotiation(neg_id, patience_current=p_current)
+
+    # 인내심 소진 → 자동 reject
+    if _pat.is_exhausted(p_current):
+        player_now = repo.load_player(pid)
+        msg = "더는 못 참겠소. 다른 손님 받으시오."
+        repo.update_negotiation(neg_id, outcome="rejected", rounds=prior_rounds + [
+            {"role": "player", "message": player_message, "price": safe_price},
+            {"role": "hero", "message": msg, "price": None},
+        ])
+        repo.insert_day_event(
+            pid, day=player_now["current_day"], phase=player_now["current_phase"],
+            kind="patience_exhausted",
+            payload={"by": "hero", "negotiation_id": neg_id, "rep_delta": -1},
+        )
+        repo.update_player(pid, reputation=max(0, player_now["reputation"] - 1))
+        new_aff = max(-100, int(hero.get("affinity", 0)) - 1)
+        repo.update_hero(hero_id, affinity=new_aff)
+        return {"negotiation_id": neg_id, "decision": "reject", "counter_price": None,
+                "message": msg, "patience_current": p_current, "patience_start": p_start}
 
     # 서버 강제: 용사(매수자) 카운터는 "지불 의향 상한"이므로 시간에 따라 단조 비감소.
     hero_prior_counters = [int(r["price"]) for r in prior_rounds
@@ -113,13 +143,19 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
         # 용사의 새 카운터는 이전 최고 카운터보다 낮아질 수 없음 (자기 의향가 후퇴 금지)
         if max_hero_counter is not None and counter < max_hero_counter:
             counter = max_hero_counter
-        # 시세 대비 합리적 최저선 — 선호 맞으면 70%, 안 맞으면 50%
+        # 시세 대비 합리적 최저 시작가 — 선호 맞으면 80%, 안 맞으면 60%
         from . import hero_registry as _hr
         _prefs = _hr.preferences_for(hero)
         _fits = weapon["type"] in _prefs.get("types", [])
-        floor = int(base * (0.7 if _fits else 0.5))
+        floor = int(base * (0.8 if _fits else 0.6))
         if counter < floor:
             counter = floor
+        # 한 라운드 최대 양보폭: 이전 카운터(또는 floor)에서 5%만 — 깐깐하게 조금씩만 올림
+        previous = max_hero_counter if max_hero_counter is not None else floor
+        max_raise = int(previous * 0.05)
+        cap_this_round = previous + max_raise
+        if counter > cap_this_round:
+            counter = cap_this_round
         # 용사는 자기 보유 금화 이상으론 못 산다 — counter를 hero_gold로 캡
         counter = min(counter, hero_gold)
 
@@ -161,7 +197,6 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
         repo.update_player(
             pid,
             reputation=player_now["reputation"] - 1,
-            current_phase=state_machine.next_phase(player_now["current_phase"]),
         )
     repo.update_negotiation(neg_id, **update)
 
@@ -170,15 +205,19 @@ async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: i
         "decision": decision,
         "counter_price": counter,
         "message": llm["message"],
+        "patience_current": p_current,
+        "patience_start": p_start,
     }
 
 
 def player_accept_counter(player: dict, neg_id: int) -> int:
-    """플레이어가 용사의 마지막 카운터를 수락. 합의가로 outcome=accepted 설정."""
+    """플레이어가 용사의 마지막 카운터를 수락. 합의가로 outcome=accepted 설정.
+    멱등: 이미 accepted면 기존 합의가 반환 (재시도 시 일관된 결과)."""
     neg = repo.get_negotiation(neg_id)
+    if neg["outcome"] == "accepted":
+        return int(neg.get("agreed_price") or 0)
     if neg["outcome"] != "open":
         raise ValueError(f"negotiation already {neg['outcome']}")
-    # 가장 최근 hero 라운드의 가격을 합의가로
     hero_rounds = [r for r in neg["rounds"] if r["role"] == "hero" and r.get("price") is not None]
     if not hero_rounds:
         raise ValueError("no hero counter to accept")
@@ -202,17 +241,17 @@ def player_reject(player: dict, neg_id: int) -> None:
     repo.update_player(
         pid,
         reputation=player_now["reputation"] - 1,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
 
-def finalize_sale(player: dict, neg_id: int) -> None:
+def finalize_sale(player: dict, neg_id: int) -> bool:
+    """무기 양도 + 골드/평판/호감도 적용. 멱등: 이미 finalized면 False 반환하고 no-op."""
     pid = player["id"]
     neg = repo.get_negotiation(neg_id)
+    if neg.get("finalized"):
+        return False
     if neg["outcome"] != "accepted":
         raise ValueError("negotiation not accepted")
-    if neg.get("finalized"):
-        raise ValueError("already_finalized")
     repo.update_negotiation(neg_id, finalized=True)   # 멱등성 — 우선 마킹
     player_now = repo.load_player(pid)
     repo.transfer_weapon_to_hero(neg["weapon_id"], neg["counterparty_id"])
@@ -220,16 +259,18 @@ def finalize_sale(player: dict, neg_id: int) -> None:
     _base_for_recover = market_price(weapon_for_recover)
     _ratio_for_recover = neg["agreed_price"] / max(_base_for_recover, 1)
     if _ratio_for_recover >= 2.0:
-        effort_recover = 20
+        effort_recover = 30
     elif _ratio_for_recover >= 1.3:
+        effort_recover = 20
+    elif _ratio_for_recover >= 1.0:
         effort_recover = 10
     else:
-        effort_recover = 0
+        effort_recover = 5
     new_effort_after_sale = min(100, int(player_now.get("effort", 0)) + effort_recover)
+    # phase 진행은 호출측(api/negotiate.py)이 dispatch_hero + advance_visitor로 처리한다.
     repo.update_player(pid, gold=player_now["gold"] + neg["agreed_price"],
                        reputation=player_now["reputation"] + 1,
-                       effort=new_effort_after_sale,
-                       current_phase=state_machine.next_phase(player_now["current_phase"]))
+                       effort=new_effort_after_sale)
     hero = repo.get_hero(neg["counterparty_id"])
     weapon = repo.get_weapon(neg["weapon_id"])
 
@@ -252,6 +293,7 @@ def finalize_sale(player: dict, neg_id: int) -> None:
                  "hero_id": neg["counterparty_id"], "price": neg["agreed_price"],
                  "affinity_delta": aff_delta, "effort_recover": effort_recover},
     )
+    return True
 
 
 # --- Plan 2: 상인 협상 (매수) ---
@@ -265,6 +307,7 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
 
     m_row = _client_or_repo_get_merchant(merchant_id)
 
+    from . import patience as _pat
     if neg_id is None:
         # 첫 라운드 — selection으로 sub-bundle 구성
         full_materials = m_row["materials"]
@@ -287,10 +330,12 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
         bundle = {"materials": sub_materials, "weapon": sub_weapon}
 
         player_data = repo.load_player(pid)
+        p_start = _pat.merchant_start(pid, player_data["current_day"], m_row["id"])
         neg = repo.insert_negotiation(pid, {
             "day": player_data["current_day"], "phase": player_data["current_phase"],
             "kind": "buy", "counterparty_id": merchant_id, "weapon_id": None,
             "materials": bundle, "rounds": [], "outcome": "open",
+            "patience_start": p_start, "patience_current": p_start,
         })
         neg_id = neg["id"]
         prior_rounds: list[dict[str, Any]] = []
@@ -307,13 +352,34 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
     if safe_price > player_gold:
         safe_price = player_gold
 
+    # 인내심 감소 (첫 라운드 skip)
+    p_current = int(neg.get("patience_current") or 50)
+    p_start = int(neg.get("patience_start") or p_current)
+    if prior_rounds:
+        last_player = next((r for r in reversed(prior_rounds) if r["role"] == "player"), None)
+        conceded = bool(last_player and safe_price > int(last_player.get("price") or 0))
+        p_current = _pat.next_after_round(p_current, conceded=conceded)
+        repo.update_negotiation(neg_id, patience_current=p_current)
+
+    if _pat.is_exhausted(p_current):
+        msg = "거래는 끝났소. 다음 손님이나 받아야겠소."
+        repo.update_negotiation(neg_id, outcome="rejected", rounds=prior_rounds + [
+            {"role": "player", "message": player_message, "price": safe_price},
+            {"role": "merchant", "message": msg, "price": None},
+        ])
+        repo.update_merchant_today(m_row["id"], outcome="done")
+        return {"negotiation_id": neg_id, "decision": "reject", "counter_price": None,
+                "message": msg, "patience_current": p_current, "patience_start": p_start}
+
     # 서버 강제: 상인(매도자) 카운터는 "최저 수용가"이므로 시간에 따라 단조 비증가.
     # 플레이어가 상인의 최저 카운터 이상을 제시하면 자동 수락.
     merch_prior_counters = [int(r["price"]) for r in prior_rounds
                              if r["role"] == "merchant" and r.get("price") is not None]
     min_merch_counter = min(merch_prior_counters) if merch_prior_counters else None
 
-    if min_merch_counter is not None and safe_price >= min_merch_counter:
+    # 자동 수락: 플레이어 가격이 (상인 최저 카운터) 또는 (asking 가격) 이상이면 무조건 accept
+    auto_accept_threshold = min_merch_counter if min_merch_counter is not None else base
+    if safe_price >= auto_accept_threshold:
         llm = {
             "decision": "accept",
             "counter_price": None,
@@ -333,9 +399,26 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
     counter = llm.get("counter_price")
     if counter is not None:
         counter = clamp_price(int(counter), base)
-        # 상인의 새 카운터는 이전 최저 카운터보다 높아질 수 없음
+        # 상인의 새 카운터는 이전 최저 카운터보다 높아질 수 없음 (양보는 단조 비증가)
         if min_merch_counter is not None and counter > min_merch_counter:
             counter = min_merch_counter
+        # 한 라운드 최대 양보폭: 이전 카운터(또는 asking)에서 5%만.
+        # 상인은 깐깐하게 조금씩만 깎아야 한다.
+        previous = min_merch_counter if min_merch_counter is not None else base
+        max_drop = int(previous * 0.05)
+        min_counter_this_round = previous - max_drop
+        if counter < min_counter_this_round:
+            counter = min_counter_this_round
+        # 절대 하한: base의 80% (자기 의향가 30%까지 후퇴 금지)
+        floor = int(base * 0.8)
+        if counter < floor:
+            counter = floor
+        # 카운터가 플레이어 제시가 이하면 자동 accept
+        if counter <= safe_price:
+            decision = "accept"
+            llm = {**llm, "decision": "accept", "counter_price": None,
+                   "message": f"좋소, {safe_price} 골드에 드리지요."}
+            counter = None
 
     new_rounds = prior_rounds + [
         {"role": "player", "message": player_message, "price": safe_price},
@@ -347,9 +430,8 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
         update["agreed_price"] = safe_price
     elif decision == "reject":
         update["outcome"] = "rejected"
-        # 상인 reject 시 phase advance + merchant 정리 (평판 변화는 §7.2: 즉시 거절 0)
-        player_now = repo.load_player(pid)
-        repo.update_player(pid, current_phase=state_machine.next_phase(player_now["current_phase"]))
+        # 상인 reject 시 merchant 정리 (평판 변화는 §7.2: 즉시 거절 0).
+        # phase advance는 호출측에서 처리.
         repo.update_merchant_today(neg["counterparty_id"], outcome="done")
     repo.update_negotiation(neg_id, **update)
 
@@ -358,6 +440,8 @@ async def step_buy(player: dict, merchant_id: int, price_offered: int, player_me
         "decision": decision,
         "counter_price": counter,
         "message": llm["message"],
+        "patience_current": p_current,
+        "patience_start": p_start,
     }
 
 
@@ -382,7 +466,7 @@ def finalize_buy(player: dict, neg_id: int) -> None:
         sharp_mult = 1 + w["sharpness"] / 200
         target = w.get("asking_price", 100)
         base_value = max(1, int(target / max(rarity_mult * sharp_mult, 0.01)))
-        repo.insert_weapon({
+        repo.insert_weapon(pid, {
             "owner": "player",
             "name": w["name"], "type": w["type"], "rarity": w["rarity"],
             "sharpness": w["sharpness"], "attribute": w.get("attribute"),
@@ -396,7 +480,6 @@ def finalize_buy(player: dict, neg_id: int) -> None:
         pid,
         gold=player_now["gold"] - neg["agreed_price"],
         reputation=player_now["reputation"] + 1,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
     repo.update_merchant_today(neg["counterparty_id"], outcome="done")
@@ -440,7 +523,6 @@ def player_reject_buy(player: dict, neg_id: int) -> None:
     repo.update_player(
         pid,
         reputation=player_now["reputation"] + rep_delta,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
     repo.update_merchant_today(neg["counterparty_id"], outcome="done")
 
@@ -559,7 +641,6 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
         repo.update_player(
             pid,
             reputation=player_now["reputation"] - 1,
-            current_phase=state_machine.next_phase(player_now["current_phase"]),
         )
     repo.update_negotiation(neg_id, **update)
 
@@ -602,7 +683,6 @@ def finalize_enhance(player: dict, neg_id: int) -> None:
         pid,
         gold=player_now["gold"] + neg["agreed_price"],
         reputation=player_now["reputation"] + 1,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
 
     ratio = neg["agreed_price"] / max(base_estimate, 1)
@@ -653,5 +733,132 @@ def player_reject_enhance(player: dict, neg_id: int) -> None:
     repo.update_player(
         pid,
         reputation=player_now["reputation"] - 1,
-        current_phase=state_machine.next_phase(player_now["current_phase"]),
     )
+
+
+# --- 011: 전리품 매수 ---
+
+async def step_buy_loot(player: dict, hero_id: int, price_offered: int,
+                         player_message: str, neg_id: int | None) -> dict[str, Any]:
+    """전리품 매수 협상. 호감도 가중 시작가 + 인내심."""
+    from . import patience as _pat
+    pid = player["id"]
+    hero = repo.get_hero(hero_id)
+    if not hero:
+        raise ValueError("hero not found")
+    loot = hero.get("loot_pending") or []
+
+    if neg_id is None:
+        if not loot:
+            raise ValueError("no loot to sell")
+        total = 0
+        for it in loot:
+            m = repo.get_material(int(it["material_id"]))
+            total += int((m or {}).get("base_price") or 0) * int(it["qty"])
+        affinity = int(hero.get("affinity", 0))
+        multiplier = max(0.5, 1.2 - affinity / 200.0)
+        asking = max(1, int(total * multiplier))
+        player_data = repo.load_player(pid)
+        p_start = _pat.hero_start(hero)
+        neg = repo.insert_negotiation(pid, {
+            "day": player_data["current_day"], "phase": player_data["current_phase"],
+            "kind": "buy_loot", "counterparty_id": hero_id, "weapon_id": None,
+            "materials": {"items": loot, "asking": asking},
+            "rounds": [], "outcome": "open",
+            "patience_start": p_start, "patience_current": p_start,
+        })
+        neg_id = neg["id"]
+        prior_rounds: list[dict[str, Any]] = []
+        base = asking
+    else:
+        neg = repo.get_negotiation(neg_id)
+        prior_rounds = neg["rounds"]
+        base = int((neg.get("materials") or {}).get("asking") or 1)
+
+    player_now = repo.load_player(pid)
+    safe_price = max(1, min(int(price_offered), int(player_now.get("gold", 0))))
+
+    hero_prior = [int(r["price"]) for r in prior_rounds
+                  if r["role"] == "hero" and r.get("price") is not None]
+    min_counter = min(hero_prior) if hero_prior else None
+
+    p_current = int(neg.get("patience_current") or _pat.hero_start(hero))
+    p_start = int(neg.get("patience_start") or p_current)
+    if prior_rounds:
+        last_player = next((r for r in reversed(prior_rounds) if r["role"] == "player"), None)
+        conceded = bool(last_player and safe_price > int(last_player.get("price") or 0))
+        p_current = _pat.next_after_round(p_current, conceded=conceded)
+        repo.update_negotiation(neg_id, patience_current=p_current)
+
+    if _pat.is_exhausted(p_current):
+        msg = "더는 못 참겠소. 전리품은 다른 데 팔겠소."
+        repo.update_negotiation(neg_id, outcome="rejected", rounds=prior_rounds + [
+            {"role": "player", "message": player_message, "price": safe_price},
+            {"role": "hero", "message": msg, "price": None},
+        ])
+        return {"negotiation_id": neg_id, "decision": "reject", "counter_price": None,
+                "message": msg, "patience_current": p_current, "patience_start": p_start}
+
+    threshold = min_counter if min_counter is not None else base
+    if safe_price >= threshold:
+        repo.update_negotiation(neg_id, outcome="accepted", agreed_price=safe_price,
+                                 rounds=prior_rounds + [
+                                     {"role": "player", "message": player_message, "price": safe_price},
+                                     {"role": "hero", "message": f"좋소, {safe_price}골드에 드리지요.", "price": None},
+                                 ])
+        return {"negotiation_id": neg_id, "decision": "accept", "counter_price": None,
+                "message": f"좋소, {safe_price}골드에 드리지요.",
+                "patience_current": p_current, "patience_start": p_start}
+
+    previous = min_counter if min_counter is not None else base
+    counter = max(int(base * 0.7), previous - int(previous * 0.05))
+    if counter <= safe_price:
+        repo.update_negotiation(neg_id, outcome="accepted", agreed_price=safe_price,
+                                 rounds=prior_rounds + [
+                                     {"role": "player", "message": player_message, "price": safe_price},
+                                     {"role": "hero", "message": f"좋소, {safe_price}골드.", "price": None},
+                                 ])
+        return {"negotiation_id": neg_id, "decision": "accept", "counter_price": None,
+                "message": f"좋소, {safe_price}골드.",
+                "patience_current": p_current, "patience_start": p_start}
+
+    msg = f"그건 너무 싸오. {counter}골드는 받아야 하오."
+    repo.update_negotiation(neg_id, rounds=prior_rounds + [
+        {"role": "player", "message": player_message, "price": safe_price},
+        {"role": "hero", "message": msg, "price": counter},
+    ])
+    return {"negotiation_id": neg_id, "decision": "counter", "counter_price": counter,
+            "message": msg, "patience_current": p_current, "patience_start": p_start}
+
+
+def finalize_buy_loot(player: dict, neg_id: int) -> bool:
+    """매수 finalize. 멱등."""
+    from . import affinity as affinity_mod
+    pid = player["id"]
+    neg = repo.get_negotiation(neg_id)
+    if neg.get("finalized"):
+        return False
+    if neg["outcome"] != "accepted":
+        raise ValueError("negotiation not accepted")
+    repo.update_negotiation(neg_id, finalized=True)
+    player_now = repo.load_player(pid)
+    price = int(neg["agreed_price"])
+    items = (neg.get("materials") or {}).get("items") or []
+    if price > int(player_now.get("gold", 0)):
+        raise ValueError("insufficient gold")
+    repo.update_player(pid, gold=player_now["gold"] - price)
+    for it in items:
+        repo.add_inventory(pid, int(it["material_id"]), int(it["qty"]))
+    hero_id = int(neg["counterparty_id"])
+    hero = repo.get_hero(hero_id)
+    new_aff = affinity_mod.clamp_affinity(int(hero.get("affinity", 0)) + 5)
+    repo.update_hero(hero_id, affinity=new_aff)
+    repo.clear_hero_loot(hero_id)
+    repo.insert_day_event(
+        pid, day=player_now["current_day"], phase=player_now["current_phase"],
+        kind="loot_sale",
+        payload={"negotiation_id": neg_id, "hero_id": hero_id, "price": price,
+                 "items": items, "affinity_delta": 5},
+    )
+    return True
+

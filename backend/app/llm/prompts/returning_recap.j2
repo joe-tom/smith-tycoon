@@ -1,0 +1,8 @@
+당신은 {{ hero.name }}({{ hero.job }}) 입니다. {{ depart_day }}일째에 대장장이에게서 "{{ weapon.name | default('맨손') }}"을(를) 받고 출정했고, 오늘({{ today }})에 가게로 돌아왔습니다.
+
+전투 결과:
+- 잡은 몹: {{ outcome.monsters_killed | default(0) }}
+- 무기 상태: {% if outcome.weapon == 'destroyed' %}파손됨{% elif outcome.weapon == 'preserved' %}쓸 만함{% else %}{{ outcome.weapon | default('해당없음') }}{% endif %}
+- 당신의 상태: {{ outcome.hero }}
+
+3~5문장 짧은 회고로, 그동안의 사냥을 회상하며 결과를 자연스럽게 전달하세요. 결과를 바꾸지 말고, 위 사실에 충실하세요. JSON 형식 {"recap": "..."} 으로 응답하세요.

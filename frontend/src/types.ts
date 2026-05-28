@@ -27,6 +27,18 @@ export interface HeroPreferences {
   stat_hint: string;
 }
 
+export interface LoreEntry {
+  day: number;
+  text: string;
+}
+
+export interface LootItem {
+  material_id: number;
+  qty: number;
+  asking_price?: number;
+  name?: string;
+}
+
 export interface Hero {
   id: number;
   name: string;
@@ -39,10 +51,12 @@ export interface Hero {
   affinity: number;
   visit_count?: number;
   preferences?: HeroPreferences;
-  // Plan 3 신규
   nickname?: string | null;
   mode?: "sell" | "enhance";
   held_weapon?: Weapon | null;
+  // 011 (2차 배치)
+  lore?: LoreEntry[];
+  loot_pending?: LootItem[];
 }
 
 export interface Player {
@@ -87,12 +101,62 @@ export interface MerchantToday {
   outcome: "pending" | "done";
 }
 
+export type VisitorKind = "new_hero" | "returning_hero" | "merchant" | "mission_npc";
+
+export interface WeaponSnapshot {
+  id?: number;
+  name?: string;
+  type?: string;
+  attack?: number;
+  attribute?: string | null;
+  weapon_type?: string;
+  rarity?: number;
+  sharpness?: number;
+}
+
+export interface BattleOutcome {
+  hero: "survived" | "injured" | "died" | string;
+  weapon?: "preserved" | "destroyed" | "none" | string;
+  demon?: string;
+  monsters_killed?: number;
+  hero_opinion?: "want_better_weapon" | "weapon_broke" | "none";
+  recap?: string;
+}
+
+export interface CurrentVisitor {
+  kind: VisitorKind;
+  hero_id?: number;
+  outcome_id?: number;
+  hero?: Hero;
+  outcome?: BattleOutcome;
+  weapon_snapshot?: WeaponSnapshot;
+  depart_day?: number;
+  recap?: string;
+  merchant?: MerchantToday;
+  // mission_npc
+  mission_id?: number;
+  mission_kind?: "tax" | "league_chief";
+  phase?: string;
+  amount?: number;
+  threshold?: number;
+  deadline?: number;
+}
+
+export interface DeathMail {
+  id: number;
+  hero_id: number;
+  weapon_snapshot: WeaponSnapshot;
+  outcome: BattleOutcome;
+}
+
 export interface StateResponse {
   player: Player | null;
   inventory: Material[];
   weapons: Weapon[];
-  hero: Hero | null;
-  merchant: MerchantToday | null;
+  current_visitor: CurrentVisitor | null;
+  day_schedule: CurrentVisitor[];
+  current_visitor_index: number;
+  death_mails: DeathMail[];
   boss_kill_count: number;
 }
 
@@ -101,6 +165,8 @@ export interface NegotiateResponse {
   decision: "accept" | "reject" | "counter";
   counter_price: number | null;
   message: string;
+  patience_current?: number;
+  patience_start?: number;
 }
 
 export interface Demon {

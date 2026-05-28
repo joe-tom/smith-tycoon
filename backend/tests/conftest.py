@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 import pytest
 
+from tests.fake_repo import FakeRepo
+
 
 @pytest.fixture(autouse=True)
 def llm_fixture_mode(monkeypatch):
@@ -13,3 +15,8 @@ def llm_fixture_mode(monkeypatch):
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture
+def fake_repo():
+    return FakeRepo()

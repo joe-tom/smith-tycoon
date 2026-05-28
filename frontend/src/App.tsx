@@ -4,6 +4,7 @@ import type { StateResponse } from "./types";
 import { SidePanel } from "./components/SidePanel";
 import { DayRouter } from "./components/DayRouter";
 import { Login } from "./components/Login";
+import { DeathMailModal } from "./components/DeathMailModal";
 import { getNickname } from "./auth";
 
 export default function App() {
@@ -35,6 +36,9 @@ export default function App() {
       <div className="main">
         <DayRouter state={state} refresh={refresh} onReset={reset} />
       </div>
+      {state.death_mails && state.death_mails.length > 0 && (
+        <DeathMailModal mails={state.death_mails} onAllAcked={refresh} />
+      )}
     </div>
   );
 }

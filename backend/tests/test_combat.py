@@ -1,5 +1,29 @@
 import pytest
+from app import combat
 from app.combat import apply_outcomes, roll_demon
+
+
+def test_decide_outcomes_returns_hero_opinion():
+    hero = {"id": 1, "name": "테스트", "str": 5, "mag": 5, "level": 1}
+    weapon = {"id": 1, "name": "검", "attack": 10, "sharpness": 30,
+              "attribute": "화", "weapon_type": "검"}
+    demon = {"id": "imp", "name": "임프", "difficulty": 1, "attribute": "수"}
+    result = combat.decide_outcomes(hero, weapon, demon, seed=0)
+    assert "hero_opinion" in result
+    assert result["hero_opinion"] in {"want_better_weapon", "weapon_broke", "none"}
+
+
+def test_decide_outcomes_weapon_broke_opinion_when_destroyed():
+    hero = {"id": 1, "name": "테스트", "str": 5, "mag": 5, "level": 1}
+    weapon = {"id": 1, "name": "검", "attack": 10, "sharpness": 0,
+              "attribute": "화", "weapon_type": "검"}
+    demon = {"id": "imp", "name": "임프", "difficulty": 10, "attribute": "수"}
+    for s in range(50):
+        result = combat.decide_outcomes(hero, weapon, demon, seed=s)
+        if result.get("weapon") == "destroyed":
+            assert result["hero_opinion"] == "weapon_broke"
+            return
+    pytest.fail("no destroyed weapon outcome found across 50 seeds")
 
 
 def test_apply_outcomes_survived_killed_increases_rep():

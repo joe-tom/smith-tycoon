@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "../api";
 import type { MerchantToday, NegotiateResponse } from "../types";
+import { PatienceGauge } from "./PatienceGauge";
 
 interface ChatMsg { role: "player" | "merchant"; message: string; price?: number | null }
 
@@ -80,6 +81,7 @@ export function MerchantNegotiation({
   return (
     <div>
       <h2>상인 협상</h2>
+      <PatienceGauge current={last?.patience_current} start={last?.patience_start} label="상인의 인내심" />
       <p>협상 묶음 (선택 합계 시세: <strong>{selectedTotal} 골드</strong>):</p>
       <ul>
         {selectedMaterials.map((m) => (

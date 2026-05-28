@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api import forge as forge_api, negotiate as negotiate_api, battle as battle_api, state as state_api, game as game_api, merchant as merchant_api, day as day_api, enhance as enhance_api
+from .api import forge as forge_api, negotiate as negotiate_api, state as state_api, game as game_api, merchant as merchant_api, day as day_api, enhance as enhance_api, visitor as visitor_api, mail as mail_api, loot as loot_api, chitchat as chitchat_api, mission as mission_api
 from .llm.client import session_totals
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -18,11 +18,15 @@ app.add_middleware(
 app.include_router(state_api.router)
 app.include_router(forge_api.router)
 app.include_router(negotiate_api.router)
-app.include_router(battle_api.router)
 app.include_router(game_api.router)
 app.include_router(merchant_api.router)
 app.include_router(day_api.router)
 app.include_router(enhance_api.router)
+app.include_router(visitor_api.router)
+app.include_router(mail_api.router)
+app.include_router(loot_api.router)
+app.include_router(chitchat_api.router)
+app.include_router(mission_api.router)
 
 
 @app.get("/health")

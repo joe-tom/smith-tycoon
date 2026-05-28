@@ -239,3 +239,112 @@ def list_defeated_boss_ids(player_id: int) -> set[str]:
     rows = _client().table("day_events").select("payload") \
         .eq("player_id", player_id).eq("kind", "boss_kill").execute().data
     return {r["payload"]["boss_id"] for r in rows if r.get("payload", {}).get("boss_id")}
+
+
+# --- 009: pending_outcomes ---
+
+def insert_pending_outcome(row: dict[str, Any]) -> dict[str, Any]:
+    return _client().table("pending_outcomes").insert(row).execute().data[0]
+
+
+def list_pending_to_resolve(player_id: int, day: int) -> list[dict[str, Any]]:
+    return _client().table("pending_outcomes").select("*") \
+        .eq("player_id", player_id).eq("resolve_day", day).eq("consumed", False) \
+        .order("id").execute().data
+
+
+def mark_pending_consumed(outcome_id: int) -> None:
+    _client().table("pending_outcomes").update({"consumed": True}) \
+        .eq("id", outcome_id).execute()
+
+
+def update_pending_resolve_day(outcome_id: int, new_day: int) -> None:
+    _client().table("pending_outcomes").update({"resolve_day": new_day}) \
+        .eq("id", outcome_id).execute()
+
+
+def update_pending_outcome(outcome_id: int, **fields: Any) -> None:
+    _client().table("pending_outcomes").update(fields).eq("id", outcome_id).execute()
+
+
+def get_pending(outcome_id: int) -> dict[str, Any] | None:
+    rows = _client().table("pending_outcomes").select("*") \
+        .eq("id", outcome_id).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def delete_weapon(weapon_id: int) -> None:
+    """소프트 삭제: 'dispatched' 상태로 마킹 (FK 참조 보존).
+    이 상태의 무기는 load_player_weapons/list_sold_weapons에 노출되지 않는다.
+    """
+    _client().table("weapons").update({"owner": "dispatched"}).eq("id", weapon_id).execute()
+
+
+# --- 011: lore / loot / materials ---
+
+def list_materials_by_category(category: str) -> list[dict[str, Any]]:
+    return _client().table("materials").select("*").eq("category", category).execute().data
+
+
+def get_material(material_id: int) -> dict[str, Any] | None:
+    rows = _client().table("materials").select("*").eq("id", material_id).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def append_hero_lore(hero_id: int, entry: dict[str, Any], cap: int = 20) -> None:
+    hero = get_hero(hero_id)
+    if not hero:
+        return
+    lore = list(hero.get("lore") or [])
+    lore.append(entry)
+    if len(lore) > cap:
+        lore = lore[-cap:]
+    _client().table("heroes").update({"lore": lore}).eq("id", hero_id).execute()
+
+
+def append_hero_loot(hero_id: int, items: list[dict[str, Any]]) -> None:
+    hero = get_hero(hero_id)
+    if not hero:
+        return
+    existing = list(hero.get("loot_pending") or [])
+    _client().table("heroes").update({"loot_pending": existing + items}) \
+        .eq("id", hero_id).execute()
+
+
+def clear_hero_loot(hero_id: int) -> None:
+    _client().table("heroes").update({"loot_pending": []}).eq("id", hero_id).execute()
+
+
+# --- 012: missions ---
+
+def insert_mission(row: dict[str, Any]) -> dict[str, Any]:
+    """UNIQUE (player_id, kind, due_day, phase)로 멱등. 충돌 시 기존 행 반환."""
+    c = _client()
+    existing = c.table("missions").select("*") \
+        .eq("player_id", row["player_id"]).eq("kind", row["kind"]) \
+        .eq("due_day", row["due_day"]).eq("phase", row["phase"]) \
+        .limit(1).execute().data
+    if existing:
+        return existing[0]
+    return c.table("missions").insert(row).execute().data[0]
+
+
+def update_mission(mission_id: int, **fields: Any) -> None:
+    _client().table("missions").update(fields).eq("id", mission_id).execute()
+
+
+def get_mission(mission_id: int) -> dict[str, Any] | None:
+    rows = _client().table("missions").select("*").eq("id", mission_id).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def list_pending_missions(player_id: int) -> list[dict[str, Any]]:
+    return _client().table("missions").select("*") \
+        .eq("player_id", player_id).eq("status", "pending") \
+        .order("due_day").execute().data
+
+
+def list_missions_today(player_id: int, day: int) -> list[dict[str, Any]]:
+    return _client().table("missions").select("*") \
+        .eq("player_id", player_id).eq("due_day", day) \
+        .eq("status", "pending").order("id").execute().data
