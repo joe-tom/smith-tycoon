@@ -1,55 +1,18 @@
 import type { StateResponse } from "../types";
-import { api } from "../api";
 import { ForgePanel } from "./ForgePanel";
-import { NegotiationChat } from "./NegotiationChat";
-import { EnhanceNegotiation } from "./EnhanceNegotiation";
-import { BattleResult } from "./BattleResult";
-import { MerchantPanel } from "./MerchantPanel";
+import { VisitorRouter } from "./VisitorRouter";
 import { DaySummary } from "./DaySummary";
 import { GameOver } from "./GameOver";
-
-const NEGOTIATE_PHASES = new Set(["hero1_negotiate", "hero2_negotiate", "hero3_negotiate"]);
-const BATTLE_PHASES = new Set(["hero1_battle", "hero2_battle", "hero3_battle"]);
-const FORGE_PHASES = new Set(["forge_open"]);
 
 export function DayRouter({ state, refresh, onReset }: { state: StateResponse; refresh: () => void; onReset: () => void }) {
   if (!state.player) return null;
   const phase = state.player.current_phase;
 
-  if (FORGE_PHASES.has(phase)) {
+  if (phase === "forge_open") {
     return <ForgePanel inventory={state.inventory} onDone={refresh} />;
   }
-  if (NEGOTIATE_PHASES.has(phase)) {
-    if (!state.hero) {
-      return <p>용사 정보를 불러오는 중...</p>;
-    }
-    if (state.hero.mode === "enhance" && state.hero.held_weapon) {
-      return (
-        <EnhanceNegotiation
-          hero={state.hero}
-          weapon={state.hero.held_weapon}
-          inventory={state.inventory}
-          onDone={refresh}
-        />
-      );
-    }
-    if (state.weapons.length === 0) {
-      const skip = async () => { await api.negotiateSkip(); refresh(); };
-      return (
-        <div>
-          <p>판매할 무기가 없습니다. 무기 없이 전투로 진행할 수 있습니다. (용사를 빈손으로 보내는 것이라 평판 -1)</p>
-          <button className="btn" onClick={skip}>건너뛰기 (전투로, 평판 -1)</button>
-        </div>
-      );
-    }
-    return <NegotiationChat hero={state.hero} weapons={state.weapons} onDone={refresh} />;
-  }
-  if (BATTLE_PHASES.has(phase)) {
-    return <BattleResult onDone={refresh} />;
-  }
-  if (phase === "merchant_negotiate") {
-    if (!state.merchant) return <p>상인 정보를 불러오는 중...</p>;
-    return <MerchantPanel merchant={state.merchant} onDone={refresh} />;
+  if (phase === "visitor") {
+    return <VisitorRouter state={state} refresh={refresh} />;
   }
   if (phase === "day_summary") {
     return <DaySummary onDone={refresh} />;
