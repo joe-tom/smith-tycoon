@@ -307,10 +307,11 @@ async def dispatch_async_battle(player: dict, hero_id: int, weapon_id: int | Non
         "day": player["current_day"], "hero_id": hero_id, "weapon_id": weapon_id,
         "demon": demon, "script_text": "", "outcomes": outcomes,
     })
+    # day_event는 결과 노출 금지 (스펙: 재방문 전까지 모름). 평판 변화도 묶어서 'dispatch'에만.
     repo.insert_day_event(
-        pid, day=player["current_day"], phase=player["current_phase"], kind="battle",
-        payload={"battle_id": battle_row["id"], "outcomes": outcomes,
-                 "hero_id": hero_id, "demon": demon, "rep_delta": delta["reputation"]},
+        pid, day=player["current_day"], phase=player["current_phase"], kind="dispatch",
+        payload={"battle_id": battle_row["id"], "hero_id": hero_id,
+                 "rep_delta": delta["reputation"]},
     )
     if outcomes["demon"] == "killed" and demon.get("is_boss"):
         repo.insert_day_event(
