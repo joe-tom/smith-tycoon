@@ -278,3 +278,38 @@ def delete_weapon(weapon_id: int) -> None:
     이 상태의 무기는 load_player_weapons/list_sold_weapons에 노출되지 않는다.
     """
     _client().table("weapons").update({"owner": "dispatched"}).eq("id", weapon_id).execute()
+
+
+# --- 011: lore / loot / materials ---
+
+def list_materials_by_category(category: str) -> list[dict[str, Any]]:
+    return _client().table("materials").select("*").eq("category", category).execute().data
+
+
+def get_material(material_id: int) -> dict[str, Any] | None:
+    rows = _client().table("materials").select("*").eq("id", material_id).limit(1).execute().data
+    return rows[0] if rows else None
+
+
+def append_hero_lore(hero_id: int, entry: dict[str, Any], cap: int = 20) -> None:
+    hero = get_hero(hero_id)
+    if not hero:
+        return
+    lore = list(hero.get("lore") or [])
+    lore.append(entry)
+    if len(lore) > cap:
+        lore = lore[-cap:]
+    _client().table("heroes").update({"lore": lore}).eq("id", hero_id).execute()
+
+
+def append_hero_loot(hero_id: int, items: list[dict[str, Any]]) -> None:
+    hero = get_hero(hero_id)
+    if not hero:
+        return
+    existing = list(hero.get("loot_pending") or [])
+    _client().table("heroes").update({"loot_pending": existing + items}) \
+        .eq("id", hero_id).execute()
+
+
+def clear_hero_loot(hero_id: int) -> None:
+    _client().table("heroes").update({"loot_pending": []}).eq("id", hero_id).execute()
