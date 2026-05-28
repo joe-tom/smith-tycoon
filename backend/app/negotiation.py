@@ -259,11 +259,13 @@ def finalize_sale(player: dict, neg_id: int) -> bool:
     _base_for_recover = market_price(weapon_for_recover)
     _ratio_for_recover = neg["agreed_price"] / max(_base_for_recover, 1)
     if _ratio_for_recover >= 2.0:
-        effort_recover = 20
+        effort_recover = 30
     elif _ratio_for_recover >= 1.3:
+        effort_recover = 20
+    elif _ratio_for_recover >= 1.0:
         effort_recover = 10
     else:
-        effort_recover = 0
+        effort_recover = 5
     new_effort_after_sale = min(100, int(player_now.get("effort", 0)) + effort_recover)
     # phase 진행은 호출측(api/negotiate.py)이 dispatch_hero + advance_visitor로 처리한다.
     repo.update_player(pid, gold=player_now["gold"] + neg["agreed_price"],

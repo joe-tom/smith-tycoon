@@ -24,7 +24,10 @@ def post_next_day(player: dict = Depends(current_player)):
             return {"ok": True, "ending": ending,
                     "current_day": 100, "current_phase": "game_over"}
     state_machine.advance_to_next_day(player)
+    # 하루 종료 시 노력 +50 자동 회복 (상한 100)
+    new_effort = min(100, int(player.get("effort", 0)) + 50)
     repo.update_player(player["id"], current_day=player["current_day"],
-                       current_phase=player["current_phase"])
+                       current_phase=player["current_phase"],
+                       effort=new_effort)
     return {"ok": True, "current_day": player["current_day"],
             "current_phase": player["current_phase"]}
