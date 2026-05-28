@@ -183,15 +183,21 @@ export function NegotiationChat({ hero, weapons, onDone }: { hero: Hero; weapons
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <label>제시 가격:&nbsp;
-              <input type="number" value={price} max={hero.gold}
-                     onChange={(e) => setPrice(Math.min(hero.gold, Math.max(0, Number(e.target.value))))} />
-            </label>
-            <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 500))} disabled={busy}>−500</button>
-            <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 100))} disabled={busy}>−100</button>
-            <button className="btn" onClick={() => setPrice((p) => Math.min(hero.gold, p + 100))} disabled={busy}>+100</button>
-            <button className="btn" onClick={() => setPrice((p) => Math.min(hero.gold, p + 500))} disabled={busy}>+500</button>
-            <small>최대 {hero.gold} 골드 (용사 보유)</small>
+            {(() => {
+              const priceCap = Math.min(hero.gold, (weapon.market_price ?? Infinity) * 3);
+              const clamp = (p: number) => Math.min(priceCap, Math.max(0, p));
+              return (<>
+                <label>제시 가격:&nbsp;
+                  <input type="number" value={price} max={priceCap}
+                         onChange={(e) => setPrice(clamp(Number(e.target.value)))} />
+                </label>
+                <button className="btn" onClick={() => setPrice((p) => clamp(p - 500))} disabled={busy}>−500</button>
+                <button className="btn" onClick={() => setPrice((p) => clamp(p - 100))} disabled={busy}>−100</button>
+                <button className="btn" onClick={() => setPrice((p) => clamp(p + 100))} disabled={busy}>+100</button>
+                <button className="btn" onClick={() => setPrice((p) => clamp(p + 500))} disabled={busy}>+500</button>
+                <small>최대 {priceCap} 골드 (시세×3 / 용사 보유 중 낮은 값)</small>
+              </>);
+            })()}
           </div>
           {negotiationStarted && (
             <textarea rows={2} style={{ width: "100%", marginTop: 8 }} value={text} onChange={(e) => setText(e.target.value)}

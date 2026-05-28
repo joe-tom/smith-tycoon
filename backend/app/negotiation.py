@@ -21,7 +21,7 @@ def market_price(weapon: dict[str, Any]) -> int:
 
 
 def clamp_price(price: int, base: int) -> int:
-    return max(int(base * 0.1), min(int(base * 5.0), price))
+    return max(int(base * 0.1), min(int(base * 3.0), price))
 
 
 async def step_sell(player: dict, weapon_id: int, hero_id: int, price_offered: int,

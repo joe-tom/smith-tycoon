@@ -7,7 +7,7 @@ def test_clamp_price_lower_bound():
 
 
 def test_clamp_price_upper_bound():
-    assert clamp_price(999999, base=1000) == 5000  # 5배 상한
+    assert clamp_price(999999, base=1000) == 3000  # 3배 상한
 
 
 def test_clamp_price_passthrough():
