@@ -39,6 +39,13 @@ export interface LootItem {
   name?: string;
 }
 
+export interface EnhanceResult {
+  weapon_name: string;
+  before: { sharpness: number; rarity: number; enhancement_level: number };
+  after: { sharpness: number; rarity: number; enhancement_level: number };
+  delta: Record<string, number>;
+}
+
 export interface Hero {
   id: number;
   name: string;

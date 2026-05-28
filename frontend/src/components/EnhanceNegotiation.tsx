@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api";
-import type { Hero, Weapon, Material, NegotiateResponse } from "../types";
+import type { Hero, Weapon, Material, NegotiateResponse, EnhanceResult } from "../types";
 import { PatienceGauge } from "./PatienceGauge";
 
 interface ChatMsg { role: "player" | "hero"; message: string; price?: number | null }
@@ -21,6 +21,7 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
   const [last, setLast] = useState<NegotiateResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [enhanceResult, setEnhanceResult] = useState<EnhanceResult | null>(null);
 
   const matSum = Object.entries(picks).reduce((s, [k, v]) => {
     const mat = inventory.find((m) => m.material_id === Number(k));
@@ -78,7 +79,10 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
   const finalize = async () => {
     if (!last) return;
     setBusy(true);
-    try { await api.enhanceFinalize(last.negotiation_id); onDone(); }
+    try {
+      const res = await api.enhanceFinalize(last.negotiation_id);
+      setEnhanceResult(res.result);
+    }
     catch (e: unknown) { setErr((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -86,7 +90,10 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
   const acceptCounter = async () => {
     if (!last) return;
     setBusy(true);
-    try { await api.enhancePlayerAccept(last.negotiation_id); onDone(); }
+    try {
+      const res = await api.enhancePlayerAccept(last.negotiation_id);
+      setEnhanceResult(res.result);
+    }
     catch (e: unknown) { setErr((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -121,6 +128,27 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
           <button className="btn" onClick={skip} disabled={busy}>강화 안 함 (다음 단계로)</button>
         </div>
         {err && <p style={{ color: "red" }}>{err}</p>}
+      </div>
+    );
+  }
+
+  if (enhanceResult) {
+    const r = enhanceResult;
+    const arrow = (b: number, a: number) => {
+      const d = a - b;
+      const sign = d > 0 ? "+" : "";
+      const color = d > 0 ? "#1a7f37" : d < 0 ? "#cf222e" : "#666";
+      return <span style={{ color }}>{b} → <strong>{a}</strong> ({sign}{d})</span>;
+    };
+    return (
+      <div>
+        <h2>✨ 강화 완료 — {r.weapon_name}</h2>
+        <div style={{ background: "#f8f4ee", padding: 16, borderRadius: 8, margin: "12px 0", maxWidth: 360 }}>
+          <p style={{ margin: "4px 0" }}>예리도: {arrow(r.before.sharpness, r.after.sharpness)}</p>
+          <p style={{ margin: "4px 0" }}>희귀도: {arrow(r.before.rarity, r.after.rarity)}</p>
+          <p style={{ margin: "4px 0" }}>강화 횟수: {r.before.enhancement_level}회 → <strong>{r.after.enhancement_level}회</strong></p>
+        </div>
+        <button className="btn" onClick={onDone}>다음으로</button>
       </div>
     );
   }

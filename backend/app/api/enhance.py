@@ -46,20 +46,20 @@ async def post_enhance_negotiate(req: EnhanceNegotiateRequest, player: dict = De
 @router.post("/enhance/finalize")
 def post_enhance_finalize(req: FinalizeRequest, player: dict = Depends(current_player)):
     try:
-        negotiation.finalize_enhance(player, req.negotiation_id)
+        result = negotiation.finalize_enhance(player, req.negotiation_id)
     except ValueError as e:
         raise HTTPException(400, detail={"error": "cannot_finalize", "message": str(e)})
-    return {"ok": True, **_refresh_and_advance(player["id"])}
+    return {"ok": True, "result": result, **_refresh_and_advance(player["id"])}
 
 
 @router.post("/enhance/player_accept")
 def post_enhance_player_accept(req: FinalizeRequest, player: dict = Depends(current_player)):
     try:
         agreed = negotiation.player_accept_enhance_counter(player, req.negotiation_id)
-        negotiation.finalize_enhance(player, req.negotiation_id)
+        result = negotiation.finalize_enhance(player, req.negotiation_id)
     except ValueError as e:
         raise HTTPException(400, detail={"error": "cannot_accept", "message": str(e)})
-    return {"ok": True, "agreed_price": agreed, **_refresh_and_advance(player["id"])}
+    return {"ok": True, "agreed_price": agreed, "result": result, **_refresh_and_advance(player["id"])}
 
 
 @router.post("/enhance/player_reject")

@@ -681,7 +681,7 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
     }
 
 
-def finalize_enhance(player: dict, neg_id: int) -> None:
+def finalize_enhance(player: dict, neg_id: int) -> dict[str, Any]:
     pid = player["id"]
     from . import enhancement as enh_mod, affinity as aff_mod
     neg = repo.get_negotiation(neg_id)
@@ -695,6 +695,11 @@ def finalize_enhance(player: dict, neg_id: int) -> None:
     sub_materials = neg["materials"]["selected"]
     base_estimate = neg["materials"]["base_estimate"]
 
+    before = {
+        "sharpness": weapon["sharpness"],
+        "rarity": weapon["rarity"],
+        "enhancement_level": weapon.get("enhancement_level", 0),
+    }
     delta = enh_mod.roll_delta(sub_materials)
     new_weapon = enh_mod.apply_to_weapon(weapon, delta, sub_materials)
     repo.update_weapon(
@@ -732,6 +737,17 @@ def finalize_enhance(player: dict, neg_id: int) -> None:
                  "price": neg["agreed_price"], "delta": delta,
                  "affinity_delta": aff_delta},
     )
+
+    return {
+        "weapon_name": weapon["name"],
+        "before": before,
+        "after": {
+            "sharpness": new_weapon["sharpness"],
+            "rarity": new_weapon["rarity"],
+            "enhancement_level": new_weapon["enhancement_level"],
+        },
+        "delta": delta,
+    }
 
 
 def player_accept_enhance_counter(player: dict, neg_id: int) -> int:

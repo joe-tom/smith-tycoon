@@ -1,5 +1,5 @@
 import type {
-  StateResponse, Weapon, NegotiateResponse, DaySummaryResponse,
+  StateResponse, Weapon, NegotiateResponse, DaySummaryResponse, EnhanceResult,
 } from "./types";
 import { getNickname } from "./auth";
 
@@ -102,9 +102,11 @@ export const api = {
       price_offered, player_message, negotiation_id, selected_materials,
     }),
   enhanceFinalize: (negotiation_id: number) =>
-    request<{ ok: true; current_phase: string }>("POST", "/enhance/finalize", { negotiation_id }),
+    request<{ ok: true; current_phase: string; result: EnhanceResult }>(
+      "POST", "/enhance/finalize", { negotiation_id }),
   enhancePlayerAccept: (negotiation_id: number) =>
-    request<{ ok: true; agreed_price: number; current_phase: string }>("POST", "/enhance/player_accept", { negotiation_id }),
+    request<{ ok: true; agreed_price: number; current_phase: string; result: EnhanceResult }>(
+      "POST", "/enhance/player_accept", { negotiation_id }),
   enhancePlayerReject: (negotiation_id: number) =>
     request<{ ok: true; current_phase: string }>("POST", "/enhance/player_reject", { negotiation_id }),
   enhanceSkip: () =>
