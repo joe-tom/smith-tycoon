@@ -34,3 +34,13 @@ def level(current: int) -> str:
 
 def is_exhausted(current: int) -> bool:
     return current <= 0
+
+
+def concession_multiplier(patience: int) -> float:
+    """양보폭 배수. 50에서 1.0×, 0/100 양 끝에서 3.0× (대칭 U곡선).
+
+    인내심이 가득한 NPC는 기분이 좋아, 거의 탈진한 NPC는 빨리 끝내려고
+    후하게 양보한다. 중간 구간(40~60)이 가장 빡빡하다.
+    """
+    distance = min(abs(patience - 50), 50)
+    return 1.0 + distance / 25

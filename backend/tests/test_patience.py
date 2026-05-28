@@ -51,3 +51,27 @@ def test_exhausted():
     assert patience.is_exhausted(0)
     assert patience.is_exhausted(-1)
     assert not patience.is_exhausted(1)
+
+
+def test_concession_multiplier_midpoint():
+    assert patience.concession_multiplier(50) == 1.0
+
+
+def test_concession_multiplier_quarter_points():
+    assert patience.concession_multiplier(25) == 2.0
+    assert patience.concession_multiplier(75) == 2.0
+
+
+def test_concession_multiplier_extremes():
+    assert patience.concession_multiplier(0) == 3.0
+    assert patience.concession_multiplier(100) == 3.0
+
+
+def test_concession_multiplier_negative_or_over_clamps():
+    assert patience.concession_multiplier(-10) == 3.0
+    assert patience.concession_multiplier(150) == 3.0
+
+
+def test_concession_multiplier_monotonic_from_midpoint():
+    assert patience.concession_multiplier(60) < patience.concession_multiplier(70)
+    assert patience.concession_multiplier(40) < patience.concession_multiplier(30)
