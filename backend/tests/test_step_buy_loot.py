@@ -97,3 +97,65 @@ def test_finalize_buy_loot_idempotent(fake_repo, monkeypatch):
     assert _neg.finalize_buy_loot(fake_repo.players[1], 1) is False
     # 골드 변화 없음
     assert fake_repo.players[1]["gold"] == 1000
+
+
+# --- step_buy_loot 인내심 양보폭 배수 ---
+
+@pytest.mark.asyncio
+async def test_step_buy_loot_concession_baseline_patience(fake_repo, monkeypatch):
+    """patience=50(기본) → mult=1.0 → 5%만 양보(인하).
+
+    loot: [{material_id=1, base_price=100, qty=1}], affinity=0
+    total=100, multiplier=max(0.5, 1.2-0/200)=1.2 → asking=120
+    previous = base = 120 (이전 영웅 카운터 없음)
+    mult = concession_multiplier(50) = 1.0
+    max_drop = int(120 * 0.05 * 1.0) = 6
+    counter = max(int(120*0.7)=84, 120-6=114) = 114
+    player offers 1 (< 114) → counter 반환
+    """
+    fake_repo.heroes.append(_hero(loot_pending=[{"material_id": 1, "qty": 1}]))
+    fake_repo.materials = [{"id": 1, "category": "일반", "base_price": 100, "name": "철"}]
+    fake_repo.players[1] = {"id": 1, "current_day": 1, "gold": 10000,
+                             "current_phase": "visitor", "reputation": 0}
+    monkeypatch.setattr(_neg, "repo", fake_repo)
+
+    # 첫 라운드(neg_id=None) — hero에 personality_tags=[] → patience_start=50
+    res = await _neg.step_buy_loot(fake_repo.players[1], 1, 1, "싸게 줘", None)
+    assert res["decision"] == "counter"
+    # base=120, previous=120, mult=1.0, drop=6, counter=114
+    assert res["counter_price"] == 114
+
+
+@pytest.mark.asyncio
+async def test_step_buy_loot_concession_high_patience_triple_drop(fake_repo, monkeypatch):
+    """patience=100 → mult=3.0 → 15%까지 양보(인하).
+
+    loot: [{material_id=1, base_price=100, qty=1}], affinity=0
+    asking=120, previous=120
+    mult = concession_multiplier(100) = 1.0 + 50/25 = 3.0
+    max_drop = int(120 * 0.05 * 3.0) = 18
+    counter = max(int(120*0.7)=84, 120-18=102) = 102
+    player offers 1 (< 102) → counter 반환
+    """
+    fake_repo.heroes.append(_hero(loot_pending=[{"material_id": 1, "qty": 1}]))
+    fake_repo.materials = [{"id": 1, "category": "일반", "base_price": 100, "name": "철"}]
+    fake_repo.players[1] = {"id": 1, "current_day": 1, "gold": 10000,
+                             "current_phase": "visitor", "reputation": 0}
+    monkeypatch.setattr(_neg, "repo", fake_repo)
+
+    # pre-seed a negotiation with patience_current=100
+    fake_repo._neg_seq += 1
+    pre_neg_id = fake_repo._neg_seq
+    fake_repo.negotiations.append({
+        "id": pre_neg_id, "player_id": 1,
+        "day": 1, "phase": "visitor",
+        "kind": "buy_loot", "counterparty_id": 1, "weapon_id": None,
+        "materials": {"items": [{"material_id": 1, "qty": 1}], "asking": 120},
+        "rounds": [], "outcome": "open",
+        "patience_start": 100, "patience_current": 100,
+    })
+
+    res = await _neg.step_buy_loot(fake_repo.players[1], 1, 1, "싸게 줘", pre_neg_id)
+    assert res["decision"] == "counter"
+    # base=120, previous=120, mult=3.0, drop=18, counter=102
+    assert res["counter_price"] == 102

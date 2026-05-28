@@ -812,7 +812,8 @@ async def step_buy_loot(player: dict, hero_id: int, price_offered: int,
                 "patience_current": p_current, "patience_start": p_start}
 
     previous = min_counter if min_counter is not None else base
-    counter = max(int(base * 0.7), previous - int(previous * 0.05))
+    mult = _pat.concession_multiplier(p_current)
+    counter = max(int(base * 0.7), previous - int(previous * 0.05 * mult))
     if counter <= safe_price:
         repo.update_negotiation(neg_id, outcome="accepted", agreed_price=safe_price,
                                  rounds=prior_rounds + [
