@@ -464,7 +464,7 @@ def finalize_buy(player: dict, neg_id: int) -> None:
         sharp_mult = 1 + w["sharpness"] / 200
         target = w.get("asking_price", 100)
         base_value = max(1, int(target / max(rarity_mult * sharp_mult, 0.01)))
-        repo.insert_weapon({
+        repo.insert_weapon(pid, {
             "owner": "player",
             "name": w["name"], "type": w["type"], "rarity": w["rarity"],
             "sharpness": w["sharpness"], "attribute": w.get("attribute"),
