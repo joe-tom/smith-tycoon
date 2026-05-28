@@ -21,6 +21,8 @@ class FakeRepo:
         self.inventory: dict[int, list[dict[str, Any]]] = {}
         self.day_events: list[dict[str, Any]] = []
         self._event_seq = 0
+        self.missions: list[dict[str, Any]] = []
+        self._mission_seq = 0
 
     # --- players ---
     def load_player(self, player_id: int) -> dict[str, Any] | None:
@@ -159,3 +161,34 @@ class FakeRepo:
 
     def insert_battle(self, player_id: int, b: dict[str, Any]) -> dict[str, Any]:
         return {**b, "id": 1, "player_id": player_id}
+
+    # --- 012: missions ---
+
+    def insert_mission(self, row: dict[str, Any]) -> dict[str, Any]:
+        key = (row["player_id"], row["kind"], row["due_day"], row["phase"])
+        for m in self.missions:
+            if (m["player_id"], m["kind"], m["due_day"], m["phase"]) == key:
+                return m
+        self._mission_seq += 1
+        saved = {"id": self._mission_seq, "status": "pending", "payload": {},
+                 "done_at": None, **row}
+        self.missions.append(saved)
+        return saved
+
+    def update_mission(self, mission_id: int, **fields: Any) -> None:
+        for m in self.missions:
+            if m["id"] == mission_id:
+                m.update(fields)
+                return
+
+    def get_mission(self, mission_id: int) -> dict[str, Any] | None:
+        return next((m for m in self.missions if m["id"] == mission_id), None)
+
+    def list_pending_missions(self, player_id: int) -> list[dict[str, Any]]:
+        return [m for m in self.missions
+                if m["player_id"] == player_id and m["status"] == "pending"]
+
+    def list_missions_today(self, player_id: int, day: int) -> list[dict[str, Any]]:
+        return [m for m in self.missions
+                if m["player_id"] == player_id and m["due_day"] == day
+                and m["status"] == "pending"]
