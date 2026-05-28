@@ -11,7 +11,8 @@
 투입 재료:
 {% for m in materials %}- {{ m.name }} × {{ m.qty }} ({{ m.category }})
 {% endfor %}
-예상 가치(참고): {{ base_estimate }} 골드
+재료 시세 합: {{ base_estimate }} 골드
+**권장 강화비(시세): {{ market_price }} 골드** (재료 시세 × 1.5, 대장장이 수공비 포함)
 
 지금까지의 대화 (총 {{ prior_rounds|length // 2 }}라운드):
 {% for r in prior_rounds %}- {{ r.role }}: "{{ r.message }}"{% if r.price %} (가격: {{ r.price }}){% endif %}
@@ -20,9 +21,10 @@
 대장장이의 새 제안: {% if player_message %}"{{ player_message }}"{% else %}(말없이 가격만 제시){% endif %} (가격: {{ price_offered }} 골드)
 
 협상 지침:
-- 2~3라운드 흥정 후 결론.
-- 예상 가치 ±20% 이내면 accept 고려.
-- 너무 비싸면 counter (적정선 제안). 너무 비현실적이면 reject.
+- 시세 ({{ market_price }}골드)가 기준. 시세 ±20% 안이면 accept 적극 고려.
+- 시세 대비 너무 비싸면 counter는 시세의 80~120% 사이로 제시 (시세 × 0.5 같은 저가는 무례).
+- 시세 3배 이상은 부르지 말 것. 시세 절반 미만도 부르지 말 것.
+- 너무 비현실적이면 reject.
 - 본인 보유 금화({{ hero.gold }}) 이상은 절대 수락·제시 금지.
 - message는 본인 직업·성격 톤으로 한 문장 이상.
 

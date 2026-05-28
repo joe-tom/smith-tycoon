@@ -22,6 +22,13 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const matSum = Object.entries(picks).reduce((s, [k, v]) => {
+    const mat = inventory.find((m) => m.material_id === Number(k));
+    return s + (mat?.base_price ?? 0) * v;
+  }, 0);
+  const marketEst = Math.max(1, Math.floor(matSum * 1.5));
+  const askCap = Math.min(hero.gold, marketEst * 3);
+
   const change = (mid: number, delta: number) => {
     setPicks((p) => {
       const cur = (p[mid] ?? 0) + delta;
@@ -43,6 +50,7 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
   const enterNegotiate = () => {
     if (Object.keys(picks).length === 0) { setErr("재료를 1개 이상 선택하세요"); return; }
     setErr(null);
+    setPrice(marketEst);  // 추천 시세를 초기 제시가로
     setStage("negotiate");
   };
 
@@ -125,11 +133,9 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
       <p>투입 재료: {Object.entries(picks).map(([k, v]) => {
         const mat = inventory.find((m) => m.material_id === Number(k));
         return `${mat?.name ?? "?"}×${v}`;
-      }).join(", ")} <small>(재료 시세 합 {Object.entries(picks).reduce((s, [k, v]) => {
-        const mat = inventory.find((m) => m.material_id === Number(k));
-        return s + (mat?.base_price ?? 0) * v;
-      }, 0)} 골드)</small></p>
-      <p><small>용사 보유 금화: {hero.gold} / 호감도 {hero.affinity}</small></p>
+      }).join(", ")} <small>(재료 시세 합 {matSum} 골드)</small></p>
+      <p><strong>추천 강화비: ~{marketEst} 골드</strong> <small>(재료 시세 × 1.5 — 대장장이 수공비 포함)</small></p>
+      <p><small>용사 보유 금화: {hero.gold} / 호감도 {hero.affinity} · 최대 제시가 {askCap} 골드</small></p>
 
       <div className="chat">
         {msgs.map((m, i) => (
@@ -163,14 +169,14 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
             <label>강화 비용:&nbsp;
-              <input type="number" value={price} max={hero.gold}
-                     onChange={(e) => setPrice(Math.min(hero.gold, Math.max(0, Number(e.target.value))))} />
+              <input type="number" value={price} max={askCap}
+                     onChange={(e) => setPrice(Math.min(askCap, Math.max(0, Number(e.target.value))))} />
             </label>
             <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 500))} disabled={busy}>−500</button>
             <button className="btn" onClick={() => setPrice((p) => Math.max(0, p - 100))} disabled={busy}>−100</button>
-            <button className="btn" onClick={() => setPrice((p) => Math.min(hero.gold, p + 100))} disabled={busy}>+100</button>
-            <button className="btn" onClick={() => setPrice((p) => Math.min(hero.gold, p + 500))} disabled={busy}>+500</button>
-            <small>최대 {hero.gold} 골드 (용사 보유)</small>
+            <button className="btn" onClick={() => setPrice((p) => Math.min(askCap, p + 100))} disabled={busy}>+100</button>
+            <button className="btn" onClick={() => setPrice((p) => Math.min(askCap, p + 500))} disabled={busy}>+500</button>
+            <small>최대 {askCap} 골드 (시세 ×3 / 용사 보유 중 낮은 값)</small>
           </div>
           {negotiationStarted && (
             <textarea rows={2} style={{ width: "100%", marginTop: 8 }} value={text}

@@ -570,12 +570,14 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
             raise ValueError("no_materials_selected")
 
         base_estimate = enh_mod.bundle_estimate(weapon, sub_materials)
+        market_price_val = max(1, int(base_estimate * 1.5))
         player_data = repo.load_player(pid)
         p_start_val = _pat.hero_start(hero)
         neg = repo.insert_negotiation(pid, {
             "day": player_data["current_day"], "phase": player_data["current_phase"],
             "kind": "enhance", "counterparty_id": hero_id, "weapon_id": weapon_id,
-            "materials": {"selected": sub_materials, "base_estimate": base_estimate},
+            "materials": {"selected": sub_materials, "base_estimate": base_estimate,
+                          "market_price": market_price_val},
             "rounds": [], "outcome": "open",
             "patience_start": p_start_val, "patience_current": p_start_val,
         })
@@ -586,14 +588,18 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
         prior_rounds = neg["rounds"]
         sub_materials = neg["materials"]["selected"]
         base_estimate = neg["materials"]["base_estimate"]
+        market_price_val = int(neg["materials"].get("market_price")
+                               or max(1, int(base_estimate * 1.5)))
 
-    safe_price = min(max(1, int(price_offered)), hero_gold)
+    # player 제시가 cap: 시세 × 3 (이상은 부르지 못함) — 그리고 hero 보유 금화 이내
+    player_ask_cap = min(hero_gold, market_price_val * 3)
+    safe_price = min(max(1, int(price_offered)), player_ask_cap)
 
-    # 인내심 추적
+    # 인내심 추적 — 플레이어가 가격을 낮추면 양보 (강화는 플레이어가 매도자)
     p_current = int(neg.get("patience_current") or _pat.hero_start(hero))
     if prior_rounds:
         last_player = next((r for r in reversed(prior_rounds) if r["role"] == "player"), None)
-        conceded = bool(last_player and int(last_player.get("price") or 0) < safe_price)
+        conceded = bool(last_player and safe_price < int(last_player.get("price") or 0))
         p_current = _pat.next_after_round(p_current, conceded=conceded)
         repo.update_negotiation(neg_id, patience_current=p_current)
 
@@ -609,6 +615,7 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
             "negotiate_enhance", "enhance_accept",
             hero=hero, weapon=weapon, materials=sub_materials,
             base_estimate=base_estimate,
+            market_price=market_price_val,
             affinity=affinity, nickname=hero.get("nickname"),
             prior_rounds=prior_rounds,
             player_message=player_message,
@@ -627,6 +634,11 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
             mult = _pat.concession_multiplier(p_current)
             max_raise = int(max_hero_counter * 0.05 * mult)
             counter = min(counter, max_hero_counter + max_raise)
+        else:
+            # 라운드 1 floor: 시세 80%. 단 hero가 그만큼도 못 내면 floor 무시 (hero_gold cap이 처리).
+            floor = int(market_price_val * 0.8)
+            if floor <= hero_gold and counter < floor:
+                counter = floor
         counter = min(counter, hero_gold)
         if counter >= safe_price:
             decision = "accept"

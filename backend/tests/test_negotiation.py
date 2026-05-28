@@ -340,7 +340,7 @@ def _enhance_pre_neg(fake_repo, hero_id: int, weapon_id: int,
     """Round 2 시나리오용: 이전 라운드에 hero counter 기록이 있는 협상을 세팅.
 
     prior_player_price: 직전 라운드 플레이어 제시가. 양보 여부(conceded) 계산에 영향.
-      - conceded = (prior_player_price < 이번_safe_price)
+      - conceded = (이번_safe_price < prior_player_price)  # 매도자 가격 인하 = 양보
       - 양보 없으면 patience -10, 있으면 -5.
     patience_current: 이번 라운드 시작 전 값. 감소 후 값이 테스트 기대치가 됨.
     """
@@ -370,15 +370,16 @@ def _enhance_pre_neg(fake_repo, hero_id: int, weapon_id: int,
 async def test_step_enhance_concession_baseline_patience(fake_repo, monkeypatch):
     """patience=50(기본) → mult=1.0 → 5%까지만 카운터 상승.
 
+    market = base_estimate(100) * 1.5 = 150, askCap = min(1000, 450) = 450
     max_hero_counter = 200 (직전 라운드 hero 제시가)
     patience 추적:
-      prior_player_price=999, safe_price=500 → conceded=(999<500)=False → p -10
+      prior_player_price=1, safe_price=450 → conceded=(450<1)=False → p -10
       patience_current seeded at 60 → after decrement: p_current=50
     mult = concession_multiplier(50) = 1.0
     max_raise = int(200 * 0.05 * 1.0) = 10
     cap = 200 + 10 = 210
     LLM counter=9999 → min(9999, 210) = 210 (hero_gold=1000 > 210)
-    player offers 500 > 210 → stays counter, counter_price = 210
+    player offers 500 (clamped to 450) > 210 → stays counter, counter_price = 210
     """
     from unittest.mock import AsyncMock
 
@@ -402,11 +403,11 @@ async def test_step_enhance_concession_baseline_patience(fake_repo, monkeypatch)
         return_value={"decision": "counter", "counter_price": 9999, "message": "더 주시오."}
     ))
 
-    # patience_current=60, prior_player_price=999, safe_price=500
-    # conceded=(999<500)=False → p -10 → p_current=50 → mult=1.0
+    # patience_current=60, prior_player_price=1, safe_price=450
+    # conceded=(450<1)=False → p -10 → p_current=50 → mult=1.0
     neg_id = _enhance_pre_neg(fake_repo, hero_id=1, weapon_id=10,
                                max_hero_counter=200, patience_current=60,
-                               prior_player_price=999)
+                               prior_player_price=1)
 
     # player offers 500 (> cap=210) → hero counters at 210
     res = await _neg.step_enhance(
@@ -422,15 +423,16 @@ async def test_step_enhance_concession_baseline_patience(fake_repo, monkeypatch)
 async def test_step_enhance_concession_high_patience_triple_raise(fake_repo, monkeypatch):
     """patience=100 → mult=3.0 → 15%까지 카운터 상승.
 
+    market = base_estimate(100) * 1.5 = 150, askCap = min(1000, 450) = 450
     max_hero_counter = 200
     patience 추적:
-      prior_player_price=1, safe_price=500 → conceded=(1<500)=True → p -5
+      prior_player_price=999, safe_price=450 → conceded=(450<999)=True → p -5
       patience_current seeded at 105 → after decrement: p_current=100
     mult = concession_multiplier(100) = 1.0 + 50/25 = 3.0
     max_raise = int(200 * 0.05 * 3.0) = 30
     cap = 200 + 30 = 230
     LLM counter=9999 → min with hero_gold=1000=1000, then cap → min(1000, 230) = 230
-    player offers 500 > 230 → stays counter, counter_price = 230
+    player offers 500 (clamped to 450) > 230 → stays counter, counter_price = 230
     """
     from unittest.mock import AsyncMock
 
@@ -454,11 +456,11 @@ async def test_step_enhance_concession_high_patience_triple_raise(fake_repo, mon
         return_value={"decision": "counter", "counter_price": 9999, "message": "더 주시오."}
     ))
 
-    # patience_current=105, prior_player_price=1, safe_price=500
-    # conceded=(1<500)=True → p -5 → p_current=100 → mult=3.0
+    # patience_current=105, prior_player_price=999, safe_price=450
+    # conceded=(450<999)=True → p -5 → p_current=100 → mult=3.0
     neg_id = _enhance_pre_neg(fake_repo, hero_id=2, weapon_id=20,
                                max_hero_counter=200, patience_current=105,
-                               prior_player_price=1)
+                               prior_player_price=999)
 
     # player offers 500 (> cap=230) → hero counters at 230
     res = await _neg.step_enhance(
