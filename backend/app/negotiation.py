@@ -552,7 +552,7 @@ async def step_enhance(player: dict, hero_id: int, price_offered: int, player_me
     affinity = int(hero.get("affinity", 0))
 
     if neg_id is None:
-        inv = repo.load_inventory()
+        inv = repo.load_inventory(pid)
         inv_by_id = {row["material_id"]: row for row in inv}
         sub_materials = []
         for s in (selected_materials or []):

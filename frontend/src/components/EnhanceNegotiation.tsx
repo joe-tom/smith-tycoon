@@ -101,7 +101,7 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
         <h4>강화에 투입할 재료 선택</h4>
         {inventory.filter((m) => m.qty > 0).map((m) => (
           <div key={m.material_id} className="material-row">
-            <span style={{ flex: 1 }}>{m.name} <small>({m.category} · {m.attribute ?? "무"}, 보유 {m.qty})</small></span>
+            <span style={{ flex: 1 }}>{m.name} <small>({m.category} · {m.attribute ?? "무"}, 시세 {m.base_price}골드, 보유 {m.qty})</small></span>
             <button className="btn" onClick={() => change(m.material_id, -1)}>−</button>
             <span style={{ width: 24, textAlign: "center" }}>{picks[m.material_id] ?? 0}</span>
             <button className="btn" onClick={() => change(m.material_id, +1)}>+</button>
@@ -125,7 +125,10 @@ export function EnhanceNegotiation({ hero, weapon, inventory, onDone }: Props) {
       <p>투입 재료: {Object.entries(picks).map(([k, v]) => {
         const mat = inventory.find((m) => m.material_id === Number(k));
         return `${mat?.name ?? "?"}×${v}`;
-      }).join(", ")}</p>
+      }).join(", ")} <small>(재료 시세 합 {Object.entries(picks).reduce((s, [k, v]) => {
+        const mat = inventory.find((m) => m.material_id === Number(k));
+        return s + (mat?.base_price ?? 0) * v;
+      }, 0)} 골드)</small></p>
       <p><small>용사 보유 금화: {hero.gold} / 호감도 {hero.affinity}</small></p>
 
       <div className="chat">
